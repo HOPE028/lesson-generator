@@ -46,4 +46,46 @@ describe("QuizSection", () => {
     ).not.toBeInTheDocument();
     expect(screen.getByText("Answer: Tallahassee.")).toBeInTheDocument();
   });
+
+  it("renders generated image visuals referenced by questions", async () => {
+    render(
+      <QuizSection
+        questions={[
+          {
+            id: "q1",
+            prompt: "Which ecosystem is shown?",
+            choices: ["Wetlands", "Desert"],
+            correctAnswer: "Wetlands",
+            explanation: "The image shows a wetland ecosystem.",
+            visualRefs: ["wetlands-scene"],
+          },
+        ]}
+        visuals={[
+          {
+            kind: "image",
+            id: "wetlands-scene",
+            title: "Florida wetlands",
+            alt: "An illustrated classroom scene of Florida wetlands.",
+            placement: "q1",
+            imageUrl:
+              "https://example.supabase.co/storage/v1/object/public/lesson-assets/lessons/lesson-id/wetlands-scene.webp",
+            storagePath: "lessons/lesson-id/wetlands-scene.webp",
+            width: 1536,
+            height: 1024,
+            format: "webp",
+            prompt:
+              "A polished educational illustration of Florida wetlands with native plants and a clear classroom-friendly composition.",
+          },
+        ]}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "Interactive" }));
+
+    expect(
+      screen.getByRole("img", {
+        name: "An illustrated classroom scene of Florida wetlands.",
+      }),
+    ).toBeInTheDocument();
+  });
 });

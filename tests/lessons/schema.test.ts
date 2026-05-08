@@ -67,6 +67,7 @@ describe("lesson schemas", () => {
     });
 
     expect(lesson.visuals[0].viewBox).toBe("0 0 200 120");
+    expect(lesson.visuals[0]).toHaveProperty("kind", "svg");
 
     expect(() =>
       generatedLessonSchema.parse({
@@ -77,6 +78,61 @@ describe("lesson schemas", () => {
             elements: Array.from({ length: 17 }, () => validPlan.visuals[0].elements[0]),
           },
         ],
+      }),
+    ).toThrow();
+  });
+
+  it("accepts generated image visuals and planned image requests", () => {
+    const lesson = generatedLessonSchema.parse({
+      ...validLesson,
+      visuals: [
+        {
+          kind: "image",
+          id: "wetlands-scene",
+          title: "Florida wetlands",
+          alt: "An illustrated classroom scene of Florida wetlands.",
+          placement: "overview",
+          imageUrl:
+            "https://example.supabase.co/storage/v1/object/public/lesson-assets/lessons/lesson-id/wetlands-scene.webp",
+          storagePath: "lessons/lesson-id/wetlands-scene.webp",
+          width: 1536,
+          height: 1024,
+          format: "webp",
+          prompt:
+            "A polished educational illustration of Florida wetlands with native plants and a clear classroom-friendly composition.",
+        },
+      ],
+    });
+    const plan = lessonPlanSchema.parse({
+      ...validPlan,
+      imageRequests: [
+        {
+          id: "wetlands-scene",
+          title: "Florida wetlands",
+          alt: "An illustrated classroom scene of Florida wetlands.",
+          placement: "overview",
+          prompt:
+            "A polished educational illustration of Florida wetlands with native plants and a clear classroom-friendly composition.",
+        },
+      ],
+    });
+
+    expect(lesson.visuals[0]).toHaveProperty("kind", "image");
+    expect(plan.imageRequests).toHaveLength(1);
+  });
+
+  it("rejects more than two planned image requests", () => {
+    expect(() =>
+      lessonPlanSchema.parse({
+        ...validPlan,
+        imageRequests: Array.from({ length: 3 }, (_, index) => ({
+          id: `image-${index}`,
+          title: `Image ${index}`,
+          alt: "An educational classroom illustration.",
+          placement: "overview",
+          prompt:
+            "A polished educational illustration with a clear classroom-friendly composition.",
+        })),
       }),
     ).toThrow();
   });

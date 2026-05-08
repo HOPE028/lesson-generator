@@ -116,7 +116,9 @@ describe("GenerateLessonsApp", () => {
         body: JSON.stringify({ outline: "A 10 question pop quiz on Florida" }),
       });
     });
-    expect(screen.getByText(/Name being generated/)).toBeInTheDocument();
+    expect(
+      screen.getByText("A 10 question pop quiz on Florida"),
+    ).toBeInTheDocument();
   });
 
   it("deletes a confirmed lesson without navigating", async () => {

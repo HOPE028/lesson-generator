@@ -2,8 +2,8 @@ export function formatRelativeTime(value: string | Date, now = new Date()) {
   const date = typeof value === "string" ? new Date(value) : value;
   const seconds = Math.max(0, Math.floor((now.getTime() - date.getTime()) / 1000));
 
-  if (seconds < 45) {
-    return "just now";
+  if (seconds < 60) {
+    return "Just created";
   }
 
   const minutes = Math.floor(seconds / 60);

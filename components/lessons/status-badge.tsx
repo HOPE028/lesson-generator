@@ -6,12 +6,18 @@ const statusStyles: Record<LessonStatus, string> = {
   planning: "border-black/15 bg-[#f6f3ec] text-black",
   generating: "border-black/15 bg-[#f6f3ec] text-black",
   validating: "border-black/15 bg-[#f6f3ec] text-black",
+  illustrating: "border-black/15 bg-[#f6f3ec] text-black",
   generated: "border-black bg-black text-white",
   failed: "border-red-200 bg-red-50 text-red-700",
 };
 
 export function StatusBadge({ status }: { status: LessonStatus }) {
-  const isAnimatedStatus = ["planning", "generating", "validating"].includes(status);
+  const isAnimatedStatus = [
+    "planning",
+    "generating",
+    "validating",
+    "illustrating",
+  ].includes(status);
 
   return (
     <span

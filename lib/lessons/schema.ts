@@ -4,6 +4,7 @@ export const lessonStatusSchema = z.enum([
   "planning",
   "generating",
   "validating",
+  "illustrating",
   "generated",
   "failed",
 ]);
@@ -45,7 +46,8 @@ export const svgElementSchema = z.discriminatedUnion("type", [
   }),
 ]);
 
-export const lessonVisualSchema = z.object({
+export const svgLessonVisualSchema = z.object({
+  kind: z.literal("svg").default("svg"),
   id: z.string().min(2).max(60),
   title: z.string().min(3).max(100),
   alt: z.string().min(8).max(240),
@@ -53,6 +55,28 @@ export const lessonVisualSchema = z.object({
   viewBox: z.string().min(5).max(40).default("0 0 200 120"),
   elements: z.array(svgElementSchema).min(1).max(16),
 });
+
+export const imageLessonVisualSchema = z.object({
+  kind: z.literal("image"),
+  id: z.string().min(2).max(60),
+  title: z.string().min(3).max(100),
+  alt: z.string().min(8).max(240),
+  placement: z.string().min(2).max(80),
+  imageUrl: z.string().url().max(2000),
+  storagePath: z.string().min(8).max(500),
+  width: z.number().int().positive(),
+  height: z.number().int().positive(),
+  format: z.literal("webp"),
+  prompt: z.string().min(20).max(32000),
+  revisedPrompt: z.string().min(20).max(32000).optional(),
+});
+
+export const lessonVisualSchema = z.union([
+  imageLessonVisualSchema,
+  svgLessonVisualSchema,
+]);
+
+export type LessonVisual = z.infer<typeof lessonVisualSchema>;
 
 export const multipleChoiceQuestionSchema = z.object({
   id: z.string().min(2).max(60),
@@ -66,6 +90,16 @@ export const multipleChoiceQuestionSchema = z.object({
   path: ["correctAnswer"],
 });
 
+export const lessonImageRequestSchema = z.object({
+  id: z.string().min(2).max(60),
+  title: z.string().min(3).max(100),
+  alt: z.string().min(8).max(240),
+  placement: z.string().min(2).max(80),
+  prompt: z.string().min(20).max(2000),
+});
+
+export type LessonImageRequest = z.infer<typeof lessonImageRequestSchema>;
+
 export const legacyQuestionSchema = z.object({
   prompt: z.string().min(5).max(500),
   answer: z.string().min(1).max(500),
@@ -76,6 +110,7 @@ export const lessonPlanSchema = z.object({
   summary: z.string().min(20).max(1000),
   questions: z.array(multipleChoiceQuestionSchema).min(1).max(12),
   visuals: z.array(lessonVisualSchema).max(8).default([]),
+  imageRequests: z.array(lessonImageRequestSchema).max(2).default([]),
 });
 
 export type LessonPlan = z.infer<typeof lessonPlanSchema>;

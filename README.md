@@ -40,6 +40,7 @@ NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your-publishable-or-anon-key
 SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 OPENAI_API_KEY=your-openai-api-key
 OPENAI_MODEL=gpt-5.5
+OPENAI_IMAGE_MODEL=gpt-image-2
 INNGEST_EVENT_KEY=your-inngest-event-key
 INNGEST_SIGNING_KEY=your-inngest-signing-key
 LANGFUSE_PUBLIC_KEY=your-langfuse-public-key
@@ -90,7 +91,7 @@ The unit tests mock Supabase, Inngest, Langfuse, browser clipboard APIs, and rou
 
 ## AI Generation Safety
 
-The generator has separate planning and generation phases. Planning produces a typed `LessonPlan`; generation produces a typed `GeneratedLesson`. Both are returned as TypeScript source and parsed with the TypeScript compiler API.
+The generator has separate planning, generation, validation, and illustration phases. Planning produces a typed `LessonPlan`; generation produces a typed `GeneratedLesson`. Both are returned as TypeScript source and parsed with the TypeScript compiler API. When a lesson benefits from richer visuals, the illustration phase can generate up to two WebP images and store them in the public `lesson-assets` Supabase Storage bucket.
 
 Validation rejects imports, variables, functions, calls, classes, unsafe object shapes, malformed syntax, and schema-invalid lesson content. Only JSON-compatible default-exported objects that satisfy the Zod schemas are saved.
 

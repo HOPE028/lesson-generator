@@ -54,6 +54,7 @@ export const generateLessonFunction = inngest.createFunction(
           traceId,
           plan: planned.plan,
           onValidating: () => updateLessonStatus(lessonId, "validating"),
+          onIllustrating: () => updateLessonStatus(lessonId, "illustrating"),
         }),
       );
 

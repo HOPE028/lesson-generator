@@ -15,6 +15,7 @@ export const validPlan: LessonPlan = {
   ],
   visuals: [
     {
+      kind: "svg",
       id: "map-dot",
       title: "Florida capital marker",
       alt: "A simple diagram marking the capital of Florida.",
@@ -32,6 +33,7 @@ export const validPlan: LessonPlan = {
       ],
     },
   ],
+  imageRequests: [],
 };
 
 export const validLesson: GeneratedLesson = {

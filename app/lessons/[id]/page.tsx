@@ -45,12 +45,14 @@ export default async function LessonPage({
           </>
         ) : null}
 
-        {lesson.status === "generating" ? (
+        {["planning", "generating", "validating", "illustrating"].includes(
+          lesson.status,
+        ) ? (
           <section className="rounded-lg border border-blue-500/20 bg-blue-500/5 p-8">
             <h1 className="text-3xl font-semibold">Lesson is generating</h1>
             <p className="mt-3 max-w-2xl leading-7 text-black/65">
-              The backend is creating and validating the TypeScript lesson. Return
-              to the table to see live status updates.
+              The backend is planning, validating, and illustrating the lesson.
+              Return to the table to see live status updates.
             </p>
           </section>
         ) : null}

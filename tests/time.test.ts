@@ -6,7 +6,12 @@ describe("formatRelativeTime", () => {
   const now = new Date("2026-05-08T12:00:00Z");
 
   it("formats recent timestamps", () => {
-    expect(formatRelativeTime("2026-05-08T11:59:35Z", now)).toBe("just now");
+    expect(formatRelativeTime("2026-05-08T11:59:35Z", now)).toBe(
+      "Just created",
+    );
+    expect(formatRelativeTime("2026-05-08T11:59:00Z", now)).toBe(
+      "1 minute ago",
+    );
   });
 
   it("formats minutes and hours", () => {

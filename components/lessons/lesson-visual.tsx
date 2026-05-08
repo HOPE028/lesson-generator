@@ -1,14 +1,11 @@
 "use client";
 
-import type { z } from "zod";
-import { Download } from "lucide-react";
+import { Download, ExternalLink } from "lucide-react";
 import { useId, useRef } from "react";
 
-import type { lessonVisualSchema } from "@/lib/lessons/schema";
+import type { LessonVisual as LessonVisualType } from "@/lib/lessons/schema";
 
-type LessonVisual = z.infer<typeof lessonVisualSchema>;
-
-export function LessonVisual({ visual }: { visual: LessonVisual }) {
+export function LessonVisual({ visual }: { visual: LessonVisualType }) {
   const svgRef = useRef<SVGSVGElement>(null);
   const clipId = useId().replaceAll(":", "");
 
@@ -56,6 +53,34 @@ export function LessonVisual({ visual }: { visual: LessonVisual }) {
     };
 
     image.src = svgUrl;
+  }
+
+  if (visual.kind === "image") {
+    return (
+      <figure className="relative overflow-hidden rounded-lg border border-blue-500/20 bg-blue-500/5">
+        <a
+          aria-label={`Open ${visual.title}`}
+          className="absolute left-2 top-2 z-10 inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-md border border-black/10 bg-white text-black shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-blue-500 hover:text-blue-600 focus:outline-none focus:ring-4 focus:ring-blue-500/20"
+          href={visual.imageUrl}
+          rel="noreferrer"
+          target="_blank"
+        >
+          <ExternalLink className="h-4 w-4" />
+        </a>
+        {/* eslint-disable-next-line @next/next/no-img-element -- Supabase Storage hosts are project-specific, so Next/Image remote config would be brittle here. */}
+        <img
+          alt={visual.alt}
+          className="aspect-[3/2] w-full bg-white object-cover"
+          height={visual.height}
+          loading="lazy"
+          src={visual.imageUrl}
+          width={visual.width}
+        />
+        <figcaption className="p-4 text-sm font-medium text-black/70">
+          {visual.title}
+        </figcaption>
+      </figure>
+    );
   }
 
   return (

@@ -25,6 +25,8 @@ type JsonValue =
   | JsonValue[]
   | { [key: string]: JsonValue };
 
+type JsonObject = { [key: string]: JsonValue };
+
 function unwrapExpression(expression: ts.Expression): ts.Expression {
   if (
     ts.isSatisfiesExpression(expression) ||
@@ -165,13 +167,57 @@ function parseDefaultExportedJson(source: string): JsonValue {
 export function validateGeneratedLessonSource(
   source: string,
 ): LessonValidationResult {
-  const lesson = generatedLessonSchema.parse(parseDefaultExportedJson(source));
-  const normalizedSource = `import type { GeneratedLesson } from "@/lib/lessons/schema";
-
-export default ${JSON.stringify(lesson, null, 2)} satisfies GeneratedLesson;
-`;
+  const lesson = generatedLessonSchema.parse(
+    normalizeGeneratedLessonAliases(parseDefaultExportedJson(source)),
+  );
+  const normalizedSource = normalizeGeneratedLessonSource(lesson);
 
   return { lesson, normalizedSource };
+}
+
+function isJsonObject(value: JsonValue): value is JsonObject {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function normalizeGeneratedLessonAliases(value: JsonValue): JsonValue {
+  if (!isJsonObject(value) || !Array.isArray(value.sections)) {
+    return value;
+  }
+
+  return {
+    ...value,
+    sections: value.sections.map((section) => {
+      if (!isJsonObject(section)) {
+        return section;
+      }
+
+      const normalizedSection: JsonObject = { ...section };
+
+      if (
+        typeof normalizedSection.heading !== "string" &&
+        typeof normalizedSection.title === "string"
+      ) {
+        normalizedSection.heading = normalizedSection.title;
+      }
+
+      if (typeof normalizedSection.body !== "string") {
+        if (typeof normalizedSection.content === "string") {
+          normalizedSection.body = normalizedSection.content;
+        } else if (typeof normalizedSection.description === "string") {
+          normalizedSection.body = normalizedSection.description;
+        }
+      }
+
+      return normalizedSection;
+    }),
+  };
+}
+
+export function normalizeGeneratedLessonSource(lesson: GeneratedLesson) {
+  return `import type { GeneratedLesson } from "@/lib/lessons/schema";
+
+export default ${JSON.stringify(generatedLessonSchema.parse(lesson), null, 2)} satisfies GeneratedLesson;
+`;
 }
 
 export function validateGeneratedPlanSource(source: string): PlanValidationResult {

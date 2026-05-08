@@ -2,13 +2,16 @@
 
 import { useRouter } from "next/navigation";
 import {
+  type CSSProperties,
   type FormEvent,
   type MouseEvent,
   useEffect,
   useMemo,
+  useRef,
   useState,
   useTransition,
 } from "react";
+import { flushSync } from "react-dom";
 import { Loader2, Trash2, Wand2 } from "lucide-react";
 
 import { AnimatedLoadingText } from "@/components/lessons/animated-loading-text";
@@ -27,17 +30,34 @@ function sortLessons(lessons: LessonRow[]) {
 }
 
 function isLoadingStatus(status: LessonRow["status"]) {
-  return ["planning", "generating", "validating"].includes(status);
+  return ["planning", "generating", "validating", "illustrating"].includes(
+    status,
+  );
 }
+
+type OutlineFlight = {
+  id: string;
+  text: string;
+  style: CSSProperties & {
+    "--flight-x": string;
+    "--flight-y": string;
+  };
+};
 
 export function GenerateLessonsApp() {
   const router = useRouter();
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [outline, setOutline] = useState("");
   const [lessons, setLessons] = useState<LessonRow[]>([]);
   const [isLoadingLessons, setIsLoadingLessons] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [openingLessonId, setOpeningLessonId] = useState<string | null>(null);
   const [deletingLessonId, setDeletingLessonId] = useState<string | null>(null);
+  const [newLessonAnimation, setNewLessonAnimation] = useState<{
+    id: string;
+    outline: string;
+  } | null>(null);
+  const [outlineFlight, setOutlineFlight] = useState<OutlineFlight | null>(null);
   const [now, setNow] = useState(() => new Date());
   const [error, setError] = useState<string | null>(null);
   const [, startTransition] = useTransition();
@@ -130,6 +150,7 @@ export function GenerateLessonsApp() {
     event.preventDefault();
     setError(null);
     setIsSubmitting(true);
+    const submittedOutline = outline.trim();
 
     try {
       const response = await fetch("/api/lessons", {
@@ -143,8 +164,51 @@ export function GenerateLessonsApp() {
         throw new Error(data.error || "Unable to generate lesson.");
       }
 
-      setLessons((current) => sortLessons([data.lesson, ...current]));
-      setOutline("");
+      const startRect = textareaRef.current?.getBoundingClientRect();
+
+      flushSync(() => {
+        setLessons((current) => sortLessons([data.lesson, ...current]));
+        setNewLessonAnimation({
+          id: data.lesson.id,
+          outline: submittedOutline,
+        });
+        setOutline("");
+      });
+
+      window.requestAnimationFrame(() => {
+        const targetElement = document.querySelector<HTMLElement>(
+          `[data-lesson-title-id="${data.lesson.id}"]`,
+        );
+        const targetRect = targetElement?.getBoundingClientRect();
+
+        if (!startRect || !targetRect) {
+          return;
+        }
+
+        setOutlineFlight({
+          id: data.lesson.id,
+          text: submittedOutline,
+          style: {
+            left: startRect.left + 16,
+            top: startRect.top + 16,
+            width: Math.max(220, startRect.width - 32),
+            "--flight-x": `${targetRect.left - startRect.left - 16}px`,
+            "--flight-y": `${targetRect.top - startRect.top - 16}px`,
+          },
+        });
+
+        window.setTimeout(() => {
+          setOutlineFlight((current) =>
+            current?.id === data.lesson.id ? null : current,
+          );
+        }, 700);
+      });
+
+      window.setTimeout(() => {
+        setNewLessonAnimation((current) =>
+          current?.id === data.lesson.id ? null : current,
+        );
+      }, 2200);
     } catch (caughtError) {
       setError(
         caughtError instanceof Error
@@ -206,6 +270,11 @@ export function GenerateLessonsApp() {
           </div>
         </div>
       ) : null}
+      {outlineFlight ? (
+        <div className="lesson-outline-flight" style={outlineFlight.style}>
+          {outlineFlight.text}
+        </div>
+      ) : null}
 
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 px-5 py-10 sm:py-14">
         <header className="space-y-3">
@@ -231,6 +300,7 @@ export function GenerateLessonsApp() {
             maxLength={2000}
             onChange={(event) => setOutline(event.target.value)}
             placeholder="A 10 question pop quiz on Florida"
+            ref={textareaRef}
             required
             value={outline}
           />
@@ -286,10 +356,18 @@ export function GenerateLessonsApp() {
                     const rowClassName =
                       "border-t border-black/10 transition-all duration-200 hover:bg-blue-500/5";
                     const isClickable = lesson.status === "generated";
+                    const animatedOutline =
+                      newLessonAnimation?.id === lesson.id
+                        ? newLessonAnimation.outline
+                        : null;
 
                     return (
                       <tr
-                        className={cn(rowClassName, isClickable && "cursor-pointer")}
+                        className={cn(
+                          rowClassName,
+                          isClickable && "cursor-pointer",
+                          animatedOutline && "lesson-row-poof",
+                        )}
                         key={lesson.id}
                         onClick={() => {
                           if (isClickable) {
@@ -313,8 +391,15 @@ export function GenerateLessonsApp() {
                         role={isClickable ? "link" : undefined}
                         tabIndex={isClickable ? 0 : undefined}
                       >
-                        <td className="truncate px-4 py-4 font-medium text-black">
-                          {isLoadingStatus(lesson.status) &&
+                        <td
+                          className="truncate px-4 py-4 font-medium text-black"
+                          data-lesson-title-id={lesson.id}
+                        >
+                          {animatedOutline ? (
+                            <span className="block truncate text-blue-700">
+                              {animatedOutline}
+                            </span>
+                          ) : isLoadingStatus(lesson.status) &&
                           (!lesson.title || lesson.title === "Untitled lesson") ? (
                             <AnimatedLoadingText
                               text="Name being generated"

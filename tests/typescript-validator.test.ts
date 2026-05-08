@@ -65,6 +65,34 @@ describe("validateGeneratedLessonSource", () => {
     expect(result.normalizedSource).toContain("satisfies GeneratedLesson");
   });
 
+  it("normalizes common section aliases in generated lessons", () => {
+    const result = validateGeneratedLessonSource(`export default {
+      title: "Florida Pop Quiz",
+      overview: "A short classroom pop quiz that checks student knowledge about Florida geography, history, and symbols.",
+      objectives: ["Identify key Florida facts", "Answer concise quiz questions"],
+      sections: [
+        {
+          title: "Quiz Instructions",
+          content: "Read each question carefully and answer in a complete sentence when possible. Use what you know about Florida's places, climate, and state symbols.",
+          examples: []
+        },
+        {
+          title: "Practice Notes",
+          description: "Use this section to review the most important vocabulary and concepts before answering the questions.",
+          examples: []
+        }
+      ],
+      questions: []
+    } satisfies GeneratedLesson;`);
+
+    expect(result.lesson.sections[0].heading).toBe("Quiz Instructions");
+    expect(result.lesson.sections[0].body).toContain("Read each question");
+    expect(result.lesson.sections[1].heading).toBe("Practice Notes");
+    expect(result.lesson.sections[1].body).toContain("review");
+    expect(result.normalizedSource).toContain('"heading": "Quiz Instructions"');
+    expect(result.normalizedSource).toContain('"body": "Read each question');
+  });
+
   it("accepts JSON-compatible TypeScript lesson plans", () => {
     const result = validateGeneratedPlanSource(validPlanSource);
 
