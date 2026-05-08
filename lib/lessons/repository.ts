@@ -1,0 +1,115 @@
+import { createAdminClient } from "@/lib/supabase/admin";
+import { lessonRowSchema, type GeneratedLesson, type LessonRow } from "./schema";
+
+const LESSON_SELECT =
+  "id, outline, title, status, typescript_source, lesson_json, trace_id, trace_url, error_message, attempt_count, created_at, updated_at";
+
+export async function listLessons(): Promise<LessonRow[]> {
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("lessons")
+    .select(LESSON_SELECT)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    throw error;
+  }
+
+  return lessonRowSchema.array().parse(data);
+}
+
+export async function getLesson(id: string): Promise<LessonRow | null> {
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("lessons")
+    .select(LESSON_SELECT)
+    .eq("id", id)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  return data ? lessonRowSchema.parse(data) : null;
+}
+
+export async function createLesson(outline: string): Promise<LessonRow> {
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("lessons")
+    .insert({
+      outline,
+      title: "Untitled lesson",
+      status: "generating",
+      attempt_count: 0,
+    })
+    .select(LESSON_SELECT)
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  return lessonRowSchema.parse(data);
+}
+
+export async function markLessonGenerated(params: {
+  id: string;
+  lesson: GeneratedLesson;
+  typescriptSource: string;
+  traceId: string;
+  traceUrl: string | null;
+}) {
+  const supabase = createAdminClient();
+  const { error } = await supabase
+    .from("lessons")
+    .update({
+      title: params.lesson.title,
+      status: "generated",
+      lesson_json: params.lesson,
+      typescript_source: params.typescriptSource,
+      trace_id: params.traceId,
+      trace_url: params.traceUrl,
+      error_message: null,
+    })
+    .eq("id", params.id);
+
+  if (error) {
+    throw error;
+  }
+}
+
+export async function markLessonFailed(id: string, errorMessage: string) {
+  const supabase = createAdminClient();
+  const { error } = await supabase
+    .from("lessons")
+    .update({
+      status: "failed",
+      error_message: errorMessage.slice(0, 2000),
+    })
+    .eq("id", id);
+
+  if (error) {
+    throw error;
+  }
+}
+
+export async function incrementAttempt(id: string) {
+  const supabase = createAdminClient();
+  const { data } = await supabase
+    .from("lessons")
+    .select("attempt_count")
+    .eq("id", id)
+    .single();
+
+  const nextAttempt = Number(data?.attempt_count ?? 0) + 1;
+
+  const { error } = await supabase
+    .from("lessons")
+    .update({ attempt_count: nextAttempt })
+    .eq("id", id);
+
+  if (error) {
+    throw error;
+  }
+}
