@@ -1,8 +1,14 @@
 import { createAdminClient } from "@/lib/supabase/admin";
-import { lessonRowSchema, type GeneratedLesson, type LessonRow } from "./schema";
+import {
+  lessonRowSchema,
+  type GeneratedLesson,
+  type LessonPlan,
+  type LessonRow,
+  type LessonStatus,
+} from "./schema";
 
 const LESSON_SELECT =
-  "id, outline, title, status, typescript_source, lesson_json, trace_id, trace_url, error_message, attempt_count, created_at, updated_at";
+  "id, outline, title, status, typescript_source, lesson_json, planning_typescript_source, planning_json, trace_id, trace_url, error_message, attempt_count, created_at, updated_at";
 
 export async function listLessons(): Promise<LessonRow[]> {
   const supabase = createAdminClient();
@@ -40,7 +46,7 @@ export async function createLesson(outline: string): Promise<LessonRow> {
     .insert({
       outline,
       title: "Untitled lesson",
-      status: "generating",
+      status: "planning",
       attempt_count: 0,
     })
     .select(LESSON_SELECT)
@@ -51,6 +57,36 @@ export async function createLesson(outline: string): Promise<LessonRow> {
   }
 
   return lessonRowSchema.parse(data);
+}
+
+export async function updateLessonStatus(id: string, status: LessonStatus) {
+  const supabase = createAdminClient();
+  const { error } = await supabase.from("lessons").update({ status }).eq("id", id);
+
+  if (error) {
+    throw error;
+  }
+}
+
+export async function markPlanningComplete(params: {
+  id: string;
+  plan: LessonPlan;
+  planningSource: string;
+}) {
+  const supabase = createAdminClient();
+  const { error } = await supabase
+    .from("lessons")
+    .update({
+      title: params.plan.title,
+      status: "generating",
+      planning_json: params.plan,
+      planning_typescript_source: params.planningSource,
+    })
+    .eq("id", params.id);
+
+  if (error) {
+    throw error;
+  }
 }
 
 export async function markLessonGenerated(params: {

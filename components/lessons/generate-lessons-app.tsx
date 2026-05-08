@@ -1,12 +1,21 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { type FormEvent, useEffect, useMemo, useState } from "react";
+import {
+  type FormEvent,
+  useEffect,
+  useMemo,
+  useState,
+  useTransition,
+} from "react";
 import { Loader2, Wand2 } from "lucide-react";
 
+import { AnimatedLoadingText } from "@/components/lessons/animated-loading-text";
+import { CopyLinkButton } from "@/components/lessons/copy-link-button";
 import { createClient } from "@/lib/supabase/client";
 import type { LessonRow } from "@/lib/lessons/schema";
 import { StatusBadge } from "@/components/lessons/status-badge";
+import { formatRelativeTime } from "@/lib/time";
 import { cn } from "@/lib/utils";
 
 function sortLessons(lessons: LessonRow[]) {
@@ -16,15 +25,23 @@ function sortLessons(lessons: LessonRow[]) {
   );
 }
 
+function isLoadingStatus(status: LessonRow["status"]) {
+  return ["planning", "generating", "validating"].includes(status);
+}
+
 export function GenerateLessonsApp() {
   const router = useRouter();
   const [outline, setOutline] = useState("");
   const [lessons, setLessons] = useState<LessonRow[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [openingLessonId, setOpeningLessonId] = useState<string | null>(null);
+  const [now, setNow] = useState(() => new Date());
   const [error, setError] = useState<string | null>(null);
+  const [, startTransition] = useTransition();
 
   const hasGeneratingLessons = useMemo(
-    () => lessons.some((lesson) => lesson.status === "generating"),
+    () =>
+      lessons.some((lesson) => isLoadingStatus(lesson.status)),
     [lessons],
   );
 
@@ -49,6 +66,11 @@ export function GenerateLessonsApp() {
     return () => {
       isMounted = false;
     };
+  }, []);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => setNow(new Date()), 60_000);
+    return () => window.clearInterval(interval);
   }, []);
 
   useEffect(() => {
@@ -128,12 +150,18 @@ export function GenerateLessonsApp() {
   }
 
   return (
-    <main className="min-h-screen bg-white text-black">
+    <main className="min-h-[calc(100vh-4rem)] bg-[#f6f3ec] text-black">
+      {openingLessonId ? (
+        <div className="fixed inset-x-0 top-0 z-50 flex justify-center">
+          <div className="mt-4 inline-flex items-center gap-2 rounded-full bg-black px-4 py-2 text-sm font-medium text-white shadow-lg">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Opening lesson...
+          </div>
+        </div>
+      ) : null}
+
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 px-5 py-10 sm:py-14">
         <header className="space-y-3">
-          <div className="inline-flex rounded-full border border-blue-500/20 bg-blue-500/10 px-3 py-1 text-sm font-medium text-blue-600">
-            Lesson Generator
-          </div>
           <div className="max-w-3xl space-y-3">
             <h1 className="text-4xl font-semibold tracking-tight sm:text-5xl">
               Generate classroom-ready lessons from an outline.
@@ -181,18 +209,19 @@ export function GenerateLessonsApp() {
             <h2 className="font-semibold">Lessons</h2>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[640px] text-left text-sm">
+            <table className="w-full min-w-[760px] table-fixed text-left text-sm">
               <thead className="bg-black/[0.03] text-black/60">
                 <tr>
-                  <th className="px-4 py-3 font-medium">Title</th>
-                  <th className="px-4 py-3 font-medium">Status</th>
-                  <th className="px-4 py-3 font-medium">Created</th>
+                  <th className="w-[42%] px-4 py-3 font-medium">Title</th>
+                  <th className="w-[20%] px-4 py-3 font-medium">Status</th>
+                  <th className="w-[18%] px-4 py-3 font-medium">Created</th>
+                  <th className="w-[20%] px-4 py-3 font-medium">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {lessons.length === 0 ? (
                   <tr>
-                    <td className="px-4 py-8 text-center text-black/50" colSpan={3}>
+                    <td className="px-4 py-8 text-center text-black/50" colSpan={4}>
                       No lessons generated yet.
                     </td>
                   </tr>
@@ -208,7 +237,10 @@ export function GenerateLessonsApp() {
                         key={lesson.id}
                         onClick={() => {
                           if (isClickable) {
-                            router.push(`/lessons/${lesson.id}`);
+                            setOpeningLessonId(lesson.id);
+                            startTransition(() => {
+                              router.push(`/lessons/${lesson.id}`);
+                            });
                           }
                         }}
                         onKeyDown={(event) => {
@@ -216,20 +248,42 @@ export function GenerateLessonsApp() {
                             isClickable &&
                             (event.key === "Enter" || event.key === " ")
                           ) {
-                            router.push(`/lessons/${lesson.id}`);
+                            setOpeningLessonId(lesson.id);
+                            startTransition(() => {
+                              router.push(`/lessons/${lesson.id}`);
+                            });
                           }
                         }}
                         role={isClickable ? "link" : undefined}
                         tabIndex={isClickable ? 0 : undefined}
                       >
-                        <td className="px-4 py-4 font-medium text-black">
-                          {lesson.title || "Untitled lesson"}
+                        <td className="truncate px-4 py-4 font-medium text-black">
+                          {isLoadingStatus(lesson.status) &&
+                          (!lesson.title || lesson.title === "Untitled lesson") ? (
+                            <AnimatedLoadingText
+                              text="Name being generated"
+                            />
+                          ) : (
+                            lesson.title || "Untitled lesson"
+                          )}
                         </td>
                         <td className="px-4 py-4">
                           <StatusBadge status={lesson.status} />
                         </td>
                         <td className="px-4 py-4 text-black/55">
-                          {new Date(lesson.created_at).toLocaleString()}
+                          {formatRelativeTime(lesson.created_at, now)}
+                        </td>
+                        <td className="px-4 py-4">
+                          <div className="flex items-center gap-2">
+                            {openingLessonId === lesson.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
+                            ) : null}
+                            <CopyLinkButton
+                              className="px-2.5 py-1.5"
+                              label="Copy"
+                              lessonId={lesson.id}
+                            />
+                          </div>
                         </td>
                       </tr>
                     );

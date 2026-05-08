@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { ArrowLeft } from "lucide-react";
 
+import { CopyLinkButton } from "@/components/lessons/copy-link-button";
 import { LessonRenderer } from "@/components/lessons/lesson-renderer";
 import { StatusBadge } from "@/components/lessons/status-badge";
 import { getLesson } from "@/lib/lessons/repository";
@@ -20,31 +22,26 @@ export default async function LessonPage({
   }
 
   return (
-    <main className="min-h-screen bg-white text-black">
+    <main className="min-h-[calc(100vh-4rem)] bg-[#f6f3ec] text-black">
       <div className="mx-auto w-full max-w-5xl px-5 py-10 sm:py-14">
         <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <Link
             className="inline-flex w-fit cursor-pointer items-center rounded-md border border-black/10 px-4 py-2 text-sm font-medium text-black transition-all duration-200 hover:-translate-y-0.5 hover:border-blue-500 hover:text-blue-600 focus:outline-none focus:ring-4 focus:ring-blue-500/20"
             href="/"
           >
+            <ArrowLeft className="mr-2 h-4 w-4" />
             Back to lessons
           </Link>
-          <StatusBadge status={lesson.status} />
+          {lesson.status === "generated" ? (
+            <CopyLinkButton lessonId={lesson.id} />
+          ) : (
+            <StatusBadge status={lesson.status} />
+          )}
         </div>
 
         {lesson.status === "generated" && lesson.lesson_json ? (
           <>
             <LessonRenderer lesson={lesson.lesson_json} />
-            {lesson.trace_url ? (
-              <a
-                className="mt-10 inline-flex cursor-pointer rounded-md bg-blue-500 px-4 py-2 text-sm font-medium text-white transition-all duration-200 hover:-translate-y-0.5 hover:bg-blue-600 focus:outline-none focus:ring-4 focus:ring-blue-500/25"
-                href={lesson.trace_url}
-                rel="noreferrer"
-                target="_blank"
-              >
-                View generation trace
-              </a>
-            ) : null}
           </>
         ) : null}
 

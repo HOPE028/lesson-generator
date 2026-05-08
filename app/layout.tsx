@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { Geist } from "next/font/google";
+
+import { AppNavbar } from "@/components/app-navbar";
 import "./globals.css";
 
 const defaultUrl = process.env.VERCEL_URL
@@ -10,6 +12,9 @@ export const metadata: Metadata = {
   metadataBase: new URL(defaultUrl),
   title: "Lesson Generator",
   description: "Generate and view TypeScript-backed lessons.",
+  icons: {
+    icon: "/icon.svg",
+  },
 };
 
 const geistSans = Geist({
@@ -25,7 +30,8 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${geistSans.className} antialiased`}>
+      <body className={`${geistSans.className} bg-[#f6f3ec] antialiased`}>
+        <AppNavbar />
         {children}
       </body>
     </html>

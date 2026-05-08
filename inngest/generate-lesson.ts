@@ -1,10 +1,12 @@
 import { inngest } from "@/inngest/client";
-import { generateLesson } from "@/lib/lessons/generator";
+import { generateLessonFromPlan, planLesson } from "@/lib/lessons/generator";
 import {
   getLesson,
   incrementAttempt,
+  markPlanningComplete,
   markLessonFailed,
   markLessonGenerated,
+  updateLessonStatus,
 } from "@/lib/lessons/repository";
 
 export const generateLessonFunction = inngest.createFunction(
@@ -27,11 +29,31 @@ export const generateLessonFunction = inngest.createFunction(
     await step.run("increment attempt", () => incrementAttempt(lessonId));
 
     try {
-      const generated = await step.run("generate and validate TypeScript", () =>
-        generateLesson({
+      await step.run("mark planning", () => updateLessonStatus(lessonId, "planning"));
+
+      const planned = await step.run("plan questions and visuals", () =>
+        planLesson({
           lessonId,
           outline: lesson.outline,
           traceId,
+        }),
+      );
+
+      await step.run("persist lesson plan", () =>
+        markPlanningComplete({
+          id: lessonId,
+          plan: planned.plan,
+          planningSource: planned.normalizedSource,
+        }),
+      );
+
+      const generated = await step.run("generate and validate TypeScript", () =>
+        generateLessonFromPlan({
+          lessonId,
+          outline: lesson.outline,
+          traceId,
+          plan: planned.plan,
+          onValidating: () => updateLessonStatus(lessonId, "validating"),
         }),
       );
 

@@ -1,4 +1,6 @@
 import type { GeneratedLesson } from "@/lib/lessons/schema";
+import { LessonVisual } from "@/components/lessons/lesson-visual";
+import { QuizSection } from "@/components/lessons/quiz-section";
 
 export function LessonRenderer({ lesson }: { lesson: GeneratedLesson }) {
   return (
@@ -28,6 +30,14 @@ export function LessonRenderer({ lesson }: { lesson: GeneratedLesson }) {
           ))}
         </ul>
       </section>
+
+      {lesson.visuals.length > 0 ? (
+        <section className="grid gap-4 sm:grid-cols-2">
+          {lesson.visuals.map((visual) => (
+            <LessonVisual key={visual.id} visual={visual} />
+          ))}
+        </section>
+      ) : null}
 
       <div className="space-y-6">
         {lesson.sections.map((section) => (
@@ -63,19 +73,7 @@ export function LessonRenderer({ lesson }: { lesson: GeneratedLesson }) {
       </div>
 
       {lesson.questions.length > 0 ? (
-        <section className="rounded-lg border border-black/10 bg-black p-6 text-white shadow-sm">
-          <h2 className="text-2xl font-semibold">Questions</h2>
-          <ol className="mt-5 space-y-4">
-            {lesson.questions.map((question, index) => (
-              <li className="space-y-1" key={question.prompt}>
-                <p className="font-medium">
-                  {index + 1}. {question.prompt}
-                </p>
-                <p className="text-white/70">Answer: {question.answer}</p>
-              </li>
-            ))}
-          </ol>
-        </section>
+        <QuizSection questions={lesson.questions} visuals={lesson.visuals} />
       ) : null}
     </article>
   );

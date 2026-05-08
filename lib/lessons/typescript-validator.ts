@@ -2,11 +2,18 @@ import ts from "typescript";
 
 import {
   generatedLessonSchema,
+  lessonPlanSchema,
   type GeneratedLesson,
+  type LessonPlan,
 } from "@/lib/lessons/schema";
 
 export type LessonValidationResult = {
   lesson: GeneratedLesson;
+  normalizedSource: string;
+};
+
+export type PlanValidationResult = {
+  plan: LessonPlan;
   normalizedSource: string;
 };
 
@@ -127,9 +134,7 @@ function assertNoUnsafeNodes(sourceFile: ts.SourceFile) {
   visit(sourceFile);
 }
 
-export function validateGeneratedLessonSource(
-  source: string,
-): LessonValidationResult {
+function parseDefaultExportedJson(source: string): JsonValue {
   const sourceFile = ts.createSourceFile(
     "generated-lesson.ts",
     source,
@@ -154,11 +159,27 @@ export function validateGeneratedLessonSource(
   assertNoUnsafeNodes(sourceFile);
 
   const exportedExpression = findDefaultExport(sourceFile);
-  const lesson = generatedLessonSchema.parse(expressionToJson(exportedExpression));
+  return expressionToJson(exportedExpression);
+}
+
+export function validateGeneratedLessonSource(
+  source: string,
+): LessonValidationResult {
+  const lesson = generatedLessonSchema.parse(parseDefaultExportedJson(source));
   const normalizedSource = `import type { GeneratedLesson } from "@/lib/lessons/schema";
 
 export default ${JSON.stringify(lesson, null, 2)} satisfies GeneratedLesson;
 `;
 
   return { lesson, normalizedSource };
+}
+
+export function validateGeneratedPlanSource(source: string): PlanValidationResult {
+  const plan = lessonPlanSchema.parse(parseDefaultExportedJson(source));
+  const normalizedSource = `import type { LessonPlan } from "@/lib/lessons/schema";
+
+export default ${JSON.stringify(plan, null, 2)} satisfies LessonPlan;
+`;
+
+  return { plan, normalizedSource };
 }
