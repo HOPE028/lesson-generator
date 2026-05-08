@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
+import { createTraceId } from "@langfuse/tracing";
 
 import { inngest } from "@/inngest/client";
 import { createLesson, listLessons } from "@/lib/lessons/repository";
 import { createLessonRequestSchema } from "@/lib/lessons/schema";
+import { ensureLangfuseTracing } from "@/lib/langfuse";
 
 export async function GET() {
   try {
@@ -23,8 +25,9 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     const { outline } = createLessonRequestSchema.parse(body);
+    ensureLangfuseTracing();
     const lesson = await createLesson(outline);
-    const traceId = crypto.randomUUID();
+    const traceId = await createTraceId(lesson.id);
 
     await inngest.send({
       name: "lesson.generate",

@@ -1,9 +1,18 @@
 import OpenAI from "openai";
 import { zodTextFormat } from "openai/helpers/zod";
-import { observeOpenAI } from "langfuse";
+import { observeOpenAI } from "@langfuse/openai";
+import {
+  propagateAttributes,
+  startActiveObservation,
+} from "@langfuse/tracing";
 
 import { aiLessonResponseSchema } from "@/lib/lessons/schema";
 import { validateGeneratedLessonSource } from "@/lib/lessons/typescript-validator";
+import {
+  ensureLangfuseTracing,
+  flushLangfuse,
+  getLangfuseTraceUrl,
+} from "@/lib/langfuse";
 
 const SYSTEM_PROMPT = `You generate classroom lesson content as TypeScript.
 
@@ -26,39 +35,25 @@ Rules:
 - Include quiz questions when the outline asks for a quiz, pop quiz, or test.
 - Keep content useful but compact enough for a web page.`;
 
-function getTraceUrl(traceId: string) {
-  const baseUrl = process.env.LANGFUSE_BASE_URL || process.env.LANGFUSE_BASEURL;
-
-  if (!baseUrl) {
-    return null;
-  }
-
-  return `${baseUrl.replace(/\/$/, "")}/trace/${traceId}`;
-}
-
 async function requestLessonSource(params: {
   outline: string;
   lessonId: string;
   traceId: string;
   validationError?: string;
+  attempt: number;
 }) {
+  ensureLangfuseTracing();
+
   const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-  const langfuseBaseUrl =
-    process.env.LANGFUSE_BASE_URL || process.env.LANGFUSE_BASEURL;
   const tracedOpenAI = observeOpenAI(openai, {
-    traceId: params.traceId,
-    traceName: "lesson.generate",
+    traceName: "lesson-generation-workflow",
+    generationName: "generate-typescript-lesson",
     sessionId: params.lessonId,
-    metadata: {
+    tags: ["lesson-generator", "typescript-generation"],
+    generationMetadata: {
       lessonId: params.lessonId,
-      outline: params.outline,
-      validationError: params.validationError,
-    },
-    tags: ["lesson-generator"],
-    clientInitParams: {
-      publicKey: process.env.LANGFUSE_PUBLIC_KEY,
-      secretKey: process.env.LANGFUSE_SECRET_KEY,
-      baseUrl: langfuseBaseUrl,
+      attempt: params.attempt,
+      hasValidationError: Boolean(params.validationError),
     },
   });
 
@@ -75,8 +70,6 @@ async function requestLessonSource(params: {
     },
   });
 
-  await tracedOpenAI.flushAsync();
-
   if (!response.output_parsed) {
     throw new Error("OpenAI did not return a parseable lesson response.");
   }
@@ -89,30 +82,122 @@ export async function generateLesson(params: {
   lessonId: string;
   traceId: string;
 }) {
-  let validationError: string | undefined;
+  ensureLangfuseTracing();
 
-  for (let attempt = 1; attempt <= 3; attempt += 1) {
-    const generated = await requestLessonSource({
-      ...params,
-      validationError,
-    });
+  try {
+    return await startActiveObservation(
+      "lesson-generation-workflow",
+      async (span) =>
+        propagateAttributes(
+          {
+            sessionId: params.lessonId,
+            traceName: "lesson-generation-workflow",
+            tags: ["lesson-generator", "inngest", "typescript-generation"],
+            metadata: {
+              lessonId: params.lessonId,
+              feature: "lesson_generation",
+            },
+          },
+          async () => {
+            span.update({
+              input: {
+                outline: params.outline,
+                lessonId: params.lessonId,
+              },
+            });
 
-    try {
-      const validated = validateGeneratedLessonSource(generated.typescriptSource);
+            let validationError: string | undefined;
 
-      return {
-        ...validated,
-        traceUrl: getTraceUrl(params.traceId),
-      };
-    } catch (error) {
-      validationError =
-        error instanceof Error ? error.message : "Unknown validation error.";
+            for (let attempt = 1; attempt <= 3; attempt += 1) {
+              const generated = await requestLessonSource({
+                ...params,
+                attempt,
+                validationError,
+              });
 
-      if (attempt === 3) {
-        throw new Error(`Generated TypeScript failed validation: ${validationError}`);
-      }
-    }
+              try {
+                const validated = await startActiveObservation(
+                  "validate-generated-typescript",
+                  async (validationSpan) => {
+                    validationSpan.update({
+                      input: {
+                        attempt,
+                        title: generated.title,
+                        sourceLength: generated.typescriptSource.length,
+                      },
+                    });
+
+                    const result = validateGeneratedLessonSource(
+                      generated.typescriptSource,
+                    );
+
+                    validationSpan.update({
+                      output: {
+                        valid: true,
+                        title: result.lesson.title,
+                        sectionCount: result.lesson.sections.length,
+                        questionCount: result.lesson.questions.length,
+                      },
+                    });
+
+                    return result;
+                  },
+                );
+
+                span.update({
+                  output: {
+                    status: "generated",
+                    title: validated.lesson.title,
+                    attempts: attempt,
+                  },
+                });
+
+                return {
+                  ...validated,
+                  traceUrl: getLangfuseTraceUrl(params.traceId),
+                };
+              } catch (error) {
+                validationError =
+                  error instanceof Error
+                    ? error.message
+                    : "Unknown validation error.";
+
+                await startActiveObservation("validation-repair-needed", (repairSpan) => {
+                  repairSpan.update({
+                    level: attempt === 3 ? "ERROR" : "WARNING",
+                    input: { attempt },
+                    output: { validationError },
+                  });
+                });
+
+                if (attempt === 3) {
+                  span.update({
+                    level: "ERROR",
+                    output: {
+                      status: "failed",
+                      validationError,
+                    },
+                  });
+
+                  throw new Error(
+                    `Generated TypeScript failed validation: ${validationError}`,
+                  );
+                }
+              }
+            }
+
+            throw new Error("Generated TypeScript failed validation.");
+          },
+        ),
+      {
+        parentSpanContext: {
+          traceId: params.traceId,
+          spanId: "0000000000000001",
+          traceFlags: 1,
+        },
+      },
+    );
+  } finally {
+    await flushLangfuse();
   }
-
-  throw new Error("Generated TypeScript failed validation.");
 }
