@@ -1,109 +1,105 @@
-<a href="https://demo-nextjs-with-supabase.vercel.app/">
-  <img alt="Next.js and Supabase Starter Kit - the fastest way to build apps with Next.js and Supabase" src="https://demo-nextjs-with-supabase.vercel.app/opengraph-image.png">
-  <h1 align="center">Next.js and Supabase Starter Kit</h1>
-</a>
+# Lesson Generator
 
-<p align="center">
- The fastest way to build apps with Next.js and Supabase
-</p>
+A two-page full-stack Next.js application for generating classroom lessons from a short outline. The app stores lesson jobs in Supabase, runs generation through Inngest, validates AI-produced TypeScript before saving it, and traces the workflow with Langfuse.
 
-<p align="center">
-  <a href="#features"><strong>Features</strong></a> ·
-  <a href="#demo"><strong>Demo</strong></a> ·
-  <a href="#deploy-to-vercel"><strong>Deploy to Vercel</strong></a> ·
-  <a href="#clone-and-run-locally"><strong>Clone and run locally</strong></a> ·
-  <a href="#feedback-and-issues"><strong>Feedback and issues</strong></a>
-  <a href="#more-supabase-examples"><strong>More Examples</strong></a>
-</p>
-<br/>
+Production: https://lesson-generator-bay.vercel.app
 
 ## Features
 
-- Works across the entire [Next.js](https://nextjs.org) stack
-  - App Router
-  - Pages Router
-  - Proxy
-  - Client
-  - Server
-  - It just works!
-- supabase-ssr. A package to configure Supabase Auth to use cookies
-- Password-based authentication block installed via the [Supabase UI Library](https://supabase.com/ui/docs/nextjs/password-based-auth)
-- Styling with [Tailwind CSS](https://tailwindcss.com)
-- Components with [shadcn/ui](https://ui.shadcn.com/)
-- Optional deployment with [Supabase Vercel Integration and Vercel deploy](#deploy-your-own)
-  - Environment variables automatically assigned to Vercel project
+- Generate lessons from outlines like `A 10 question pop quiz on Florida`.
+- Track lesson status through `planning`, `generating`, `validating`, `generated`, and `failed`.
+- View generated lessons at `/lessons/[id]` without needing auth.
+- Render structured generated TypeScript in the browser after validation.
+- Support multiple-choice interactive quiz mode and printable question-sheet mode.
+- Render safe structured SVG visuals with PNG download buttons.
+- Copy lesson links and delete lessons from the table.
+- Trace AI planning, generation, validation, and repair attempts in Langfuse.
 
-## Demo
+## Architecture
 
-You can view a fully working demo at [demo-nextjs-with-supabase.vercel.app](https://demo-nextjs-with-supabase.vercel.app/).
+- `app/` contains Next.js App Router pages and route handlers.
+- `components/lessons/` contains the lesson table, renderer, quiz UI, status badges, copy buttons, and SVG visual renderer.
+- `lib/lessons/` contains schemas, Supabase repository functions, generation orchestration, and TypeScript validation.
+- `inngest/` defines the background lesson-generation workflow.
+- `supabase/migrations/` defines the `lessons` table and planning-phase columns.
+- `tests/` contains Vitest unit tests for schemas, validation, repository behavior, API routes, and key React interactions.
 
-## Deploy to Vercel
+## Setup
 
-Vercel deployment will guide you through creating a Supabase account and project.
+Install dependencies with Bun:
 
-After installation of the Supabase integration, all relevant environment variables will be assigned to the project so the deployment is fully functioning.
+```bash
+bun install
+```
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fvercel%2Fnext.js%2Ftree%2Fcanary%2Fexamples%2Fwith-supabase&project-name=nextjs-with-supabase&repository-name=nextjs-with-supabase&demo-title=nextjs-with-supabase&demo-description=This+starter+configures+Supabase+Auth+to+use+cookies%2C+making+the+user%27s+session+available+throughout+the+entire+Next.js+app+-+Client+Components%2C+Server+Components%2C+Route+Handlers%2C+Server+Actions+and+Middleware.&demo-url=https%3A%2F%2Fdemo-nextjs-with-supabase.vercel.app%2F&external-id=https%3A%2F%2Fgithub.com%2Fvercel%2Fnext.js%2Ftree%2Fcanary%2Fexamples%2Fwith-supabase&demo-image=https%3A%2F%2Fdemo-nextjs-with-supabase.vercel.app%2Fopengraph-image.png)
+Create `.env` or `.env.local` from `.env.example`:
 
-The above will also clone the Starter kit to your GitHub, you can clone that locally and develop locally.
+```env
+NEXT_PUBLIC_SUPABASE_URL=your-project-url
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your-publishable-or-anon-key
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+OPENAI_API_KEY=your-openai-api-key
+OPENAI_MODEL=gpt-5.5
+INNGEST_EVENT_KEY=your-inngest-event-key
+INNGEST_SIGNING_KEY=your-inngest-signing-key
+LANGFUSE_PUBLIC_KEY=your-langfuse-public-key
+LANGFUSE_SECRET_KEY=your-langfuse-secret-key
+LANGFUSE_BASE_URL=https://cloud.langfuse.com
+```
 
-If you wish to just develop locally and not deploy to Vercel, [follow the steps below](#clone-and-run-locally).
+Do not expose `SUPABASE_SERVICE_ROLE_KEY`, `OPENAI_API_KEY`, `INNGEST_SIGNING_KEY`, or `LANGFUSE_SECRET_KEY` to the browser.
 
-## Clone and run locally
+## Database
 
-1. You'll first need a Supabase project which can be made [via the Supabase dashboard](https://database.new)
+Apply Supabase migrations after logging in and linking the project:
 
-2. Create a Next.js app using the Supabase Starter template npx command
+```bash
+bunx supabase login
+bunx supabase link --project-ref <project-ref>
+bunx supabase db push
+```
 
-   ```bash
-   npx create-next-app --example with-supabase with-supabase-app
-   ```
+The app uses Supabase Realtime on the `lessons` table so the lesson list can update without refreshing.
 
-   ```bash
-   yarn create next-app --example with-supabase with-supabase-app
-   ```
+## Development
 
-   ```bash
-   pnpm create next-app --example with-supabase with-supabase-app
-   ```
+Start the Next.js app:
 
-3. Use `cd` to change into the app's directory
+```bash
+bun run dev
+```
 
-   ```bash
-   cd with-supabase-app
-   ```
+Start the Inngest dev server in another terminal:
 
-4. Rename `.env.example` to `.env.local` and update the following:
+```bash
+bunx inngest-cli@latest dev -u http://localhost:3000/api/inngest
+```
 
-  ```env
-  NEXT_PUBLIC_SUPABASE_URL=[INSERT SUPABASE PROJECT URL]
-  NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=[INSERT SUPABASE PROJECT API PUBLISHABLE OR ANON KEY]
-  ```
-  > [!NOTE]
-  > This example uses `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, which refers to Supabase's new **publishable** key format.
-  > Both legacy **anon** keys and new **publishable** keys can be used with this variable name during the transition period. Supabase's dashboard may show `NEXT_PUBLIC_SUPABASE_ANON_KEY`; its value can be used in this example.
-  > See the [full announcement](https://github.com/orgs/supabase/discussions/29260) for more information.
+Then open http://localhost:3000.
 
-  Both `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` can be found in [your Supabase project's API settings](https://supabase.com/dashboard/project/_?showConnect=true)
+## Testing And Quality
 
-5. You can now run the Next.js local development server:
+```bash
+bun run test        # run Vitest unit tests
+bun run test:watch  # run Vitest in watch mode
+bun run lint        # run ESLint
+bun run build       # production build and TypeScript check
+```
 
-   ```bash
-   npm run dev
-   ```
+The unit tests mock Supabase, Inngest, Langfuse, browser clipboard APIs, and routing. They should not call real external services.
 
-   The starter kit should now be running on [localhost:3000](http://localhost:3000/).
+## AI Generation Safety
 
-6. This template comes with the default shadcn/ui style initialized. If you instead want other ui.shadcn styles, delete `components.json` and [re-install shadcn/ui](https://ui.shadcn.com/docs/installation/next)
+The generator has separate planning and generation phases. Planning produces a typed `LessonPlan`; generation produces a typed `GeneratedLesson`. Both are returned as TypeScript source and parsed with the TypeScript compiler API.
 
-> Check out [the docs for Local Development](https://supabase.com/docs/guides/getting-started/local-development) to also run Supabase locally.
+Validation rejects imports, variables, functions, calls, classes, unsafe object shapes, malformed syntax, and schema-invalid lesson content. Only JSON-compatible default-exported objects that satisfy the Zod schemas are saved.
 
-## Feedback and issues
+## Deployment
 
-Please file feedback and issues over on the [Supabase GitHub org](https://github.com/supabase/supabase/issues/new/choose).
+Deploy with Vercel:
 
-## More Supabase examples
+```bash
+bunx vercel deploy --prod
+```
 
-- [Next.js Subscription Payments Starter](https://github.com/vercel/nextjs-subscription-payments)
-- [Cookie-based Auth and the Next.js 13 App Router (free course)](https://youtube.com/playlist?list=PL5S4mPUpp4OtMhpnp93EFSo42iQ40XjbF)
-- [Supabase Auth and the Next.js App Router](https://github.com/supabase/supabase/tree/master/examples/auth/nextjs)
+Set production environment variables in Vercel project settings instead of relying on a local `.env` file during deploys. The app also requires the deployed Inngest endpoint at `/api/inngest` to be reachable so background generation can run.
