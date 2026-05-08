@@ -34,6 +34,7 @@ export function GenerateLessonsApp() {
   const router = useRouter();
   const [outline, setOutline] = useState("");
   const [lessons, setLessons] = useState<LessonRow[]>([]);
+  const [isLoadingLessons, setIsLoadingLessons] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [openingLessonId, setOpeningLessonId] = useState<string | null>(null);
   const [deletingLessonId, setDeletingLessonId] = useState<string | null>(null);
@@ -62,6 +63,10 @@ export function GenerateLessonsApp() {
     loadLessons().catch(() => {
       if (isMounted) {
         setError("Unable to load lessons.");
+      }
+    }).finally(() => {
+      if (isMounted) {
+        setIsLoadingLessons(false);
       }
     });
 
@@ -261,7 +266,16 @@ export function GenerateLessonsApp() {
                 </tr>
               </thead>
               <tbody>
-                {lessons.length === 0 ? (
+                {isLoadingLessons ? (
+                  <tr>
+                    <td className="px-4 py-8 text-center text-black/55" colSpan={4}>
+                      <span className="inline-flex items-center gap-2">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Loading lessons...
+                      </span>
+                    </td>
+                  </tr>
+                ) : lessons.length === 0 ? (
                   <tr>
                     <td className="px-4 py-8 text-center text-black/50" colSpan={4}>
                       No lessons generated yet.

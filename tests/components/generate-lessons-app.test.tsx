@@ -36,6 +36,15 @@ describe("GenerateLessonsApp", () => {
     });
   });
 
+  it("shows a table loading animation while lessons are loading", () => {
+    vi.stubGlobal("fetch", vi.fn(() => new Promise(() => {})));
+
+    render(<GenerateLessonsApp />);
+
+    expect(screen.getByText("Loading lessons...")).toBeInTheDocument();
+    expect(screen.queryByText("No lessons generated yet.")).not.toBeInTheDocument();
+  });
+
   it("renders fetched lessons and opens generated rows", async () => {
     const row = buildLessonRow();
     vi.stubGlobal(
