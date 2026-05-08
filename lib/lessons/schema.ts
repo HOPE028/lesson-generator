@@ -80,6 +80,10 @@ export const lessonPlanSchema = z.object({
 
 export type LessonPlan = z.infer<typeof lessonPlanSchema>;
 
+export const persistedLessonPlanSchema = lessonPlanSchema.extend({
+  title: z.string().min(3).max(120).optional(),
+});
+
 export const generatedLessonSchema = z.object({
   title: z.string().min(3).max(120),
   overview: z.string().min(20).max(1200),
@@ -111,7 +115,7 @@ export const lessonRowSchema = z.object({
   typescript_source: z.string().nullable(),
   lesson_json: generatedLessonSchema.nullable(),
   planning_typescript_source: z.string().nullable().optional(),
-  planning_json: lessonPlanSchema.nullable().optional(),
+  planning_json: persistedLessonPlanSchema.nullable().optional(),
   trace_id: z.string().nullable(),
   trace_url: z.string().nullable(),
   error_message: z.string().nullable(),

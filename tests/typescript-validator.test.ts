@@ -4,6 +4,7 @@ import {
   validateGeneratedLessonSource,
   validateGeneratedPlanSource,
 } from "@/lib/lessons/typescript-validator";
+import { lessonRowSchema } from "@/lib/lessons/schema";
 
 const validSource = `export default {
   title: "Florida Pop Quiz",
@@ -112,5 +113,39 @@ describe("validateGeneratedLessonSource", () => {
         }]
       } satisfies GeneratedLesson;`),
     ).toThrow(/correctAnswer/);
+  });
+
+  it("accepts legacy persisted planning rows without a title", () => {
+    const row = lessonRowSchema.parse({
+      id: "11111111-1111-4111-8111-111111111111",
+      outline: "A 10 question pop quiz on Florida",
+      title: "Florida Pop Quiz",
+      status: "generated",
+      typescript_source: null,
+      lesson_json: null,
+      planning_typescript_source: null,
+      planning_json: {
+        summary: "A short quiz plan that predates saved planning titles.",
+        questions: [
+          {
+            id: "q1",
+            prompt: "What is the capital of Florida?",
+            choices: ["Miami", "Tallahassee", "Orlando"],
+            correctAnswer: "Tallahassee",
+            explanation: "Tallahassee is Florida's capital city.",
+            visualRefs: [],
+          },
+        ],
+        visuals: [],
+      },
+      trace_id: null,
+      trace_url: null,
+      error_message: null,
+      attempt_count: 1,
+      created_at: "2026-05-08T00:00:00.000Z",
+      updated_at: "2026-05-08T00:00:00.000Z",
+    });
+
+    expect(row.planning_json?.title).toBeUndefined();
   });
 });

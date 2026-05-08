@@ -10,6 +10,21 @@ import {
 const LESSON_SELECT =
   "id, outline, title, status, typescript_source, lesson_json, planning_typescript_source, planning_json, trace_id, trace_url, error_message, attempt_count, created_at, updated_at";
 
+function parseLessonRow(data: unknown): LessonRow | null {
+  const result = lessonRowSchema.safeParse(data);
+
+  if (!result.success) {
+    const id =
+      data && typeof data === "object" && "id" in data
+        ? String(data.id)
+        : "unknown";
+    console.warn(`Skipping invalid lesson row ${id}:`, result.error.flatten());
+    return null;
+  }
+
+  return result.data;
+}
+
 export async function listLessons(): Promise<LessonRow[]> {
   const supabase = createAdminClient();
   const { data, error } = await supabase
@@ -21,7 +36,10 @@ export async function listLessons(): Promise<LessonRow[]> {
     throw error;
   }
 
-  return lessonRowSchema.array().parse(data);
+  return (data ?? []).flatMap((row) => {
+    const lesson = parseLessonRow(row);
+    return lesson ? [lesson] : [];
+  });
 }
 
 export async function getLesson(id: string): Promise<LessonRow | null> {
