@@ -3,12 +3,13 @@
 import { useRouter } from "next/navigation";
 import {
   type FormEvent,
+  type MouseEvent,
   useEffect,
   useMemo,
   useState,
   useTransition,
 } from "react";
-import { Loader2, Wand2 } from "lucide-react";
+import { Loader2, Trash2, Wand2 } from "lucide-react";
 
 import { AnimatedLoadingText } from "@/components/lessons/animated-loading-text";
 import { CopyLinkButton } from "@/components/lessons/copy-link-button";
@@ -35,6 +36,7 @@ export function GenerateLessonsApp() {
   const [lessons, setLessons] = useState<LessonRow[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [openingLessonId, setOpeningLessonId] = useState<string | null>(null);
+  const [deletingLessonId, setDeletingLessonId] = useState<string | null>(null);
   const [now, setNow] = useState(() => new Date());
   const [error, setError] = useState<string | null>(null);
   const [, startTransition] = useTransition();
@@ -149,6 +151,46 @@ export function GenerateLessonsApp() {
     }
   }
 
+  async function deleteLesson(
+    event: MouseEvent<HTMLButtonElement>,
+    lesson: LessonRow,
+  ) {
+    event.stopPropagation();
+    setError(null);
+
+    const title = lesson.title || "Untitled lesson";
+    const confirmed = window.confirm(`Delete "${title}"? This cannot be undone.`);
+
+    if (!confirmed) {
+      return;
+    }
+
+    setDeletingLessonId(lesson.id);
+
+    try {
+      const response = await fetch(`/api/lessons/${lesson.id}`, {
+        method: "DELETE",
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Unable to delete lesson.");
+      }
+
+      setLessons((current) =>
+        current.filter((currentLesson) => currentLesson.id !== lesson.id),
+      );
+    } catch (caughtError) {
+      setError(
+        caughtError instanceof Error
+          ? caughtError.message
+          : "Unable to delete lesson.",
+      );
+    } finally {
+      setDeletingLessonId(null);
+    }
+  }
+
   return (
     <main className="min-h-[calc(100vh-4rem)] bg-[#f6f3ec] text-black">
       {openingLessonId ? (
@@ -209,13 +251,13 @@ export function GenerateLessonsApp() {
             <h2 className="font-semibold">Lessons</h2>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[760px] table-fixed text-left text-sm">
+            <table className="w-full min-w-[860px] table-fixed text-left text-sm">
               <thead className="bg-black/[0.03] text-black/60">
                 <tr>
-                  <th className="w-[42%] px-4 py-3 font-medium">Title</th>
-                  <th className="w-[20%] px-4 py-3 font-medium">Status</th>
+                  <th className="w-[38%] px-4 py-3 font-medium">Title</th>
+                  <th className="w-[18%] px-4 py-3 font-medium">Status</th>
                   <th className="w-[18%] px-4 py-3 font-medium">Created</th>
-                  <th className="w-[20%] px-4 py-3 font-medium">Actions</th>
+                  <th className="w-[26%] px-4 py-3 font-medium">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -283,6 +325,20 @@ export function GenerateLessonsApp() {
                               label="Copy"
                               lessonId={lesson.id}
                             />
+                            <button
+                              className="inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-md border border-red-200 bg-white px-2.5 py-1.5 text-sm font-medium text-red-600 transition-all duration-200 hover:-translate-y-0.5 hover:border-red-300 hover:bg-red-50 focus:outline-none focus:ring-4 focus:ring-red-500/15 disabled:cursor-not-allowed disabled:opacity-60"
+                              disabled={deletingLessonId === lesson.id}
+                              onClick={(event) => deleteLesson(event, lesson)}
+                              onKeyDown={(event) => event.stopPropagation()}
+                              type="button"
+                            >
+                              {deletingLessonId === lesson.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Trash2 className="h-4 w-4" />
+                              )}
+                              Delete
+                            </button>
                           </div>
                         </td>
                       </tr>

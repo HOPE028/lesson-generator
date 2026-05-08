@@ -57,6 +57,15 @@ export async function getLesson(id: string): Promise<LessonRow | null> {
   return data ? lessonRowSchema.parse(data) : null;
 }
 
+export async function deleteLesson(id: string) {
+  const supabase = createAdminClient();
+  const { error } = await supabase.from("lessons").delete().eq("id", id);
+
+  if (error) {
+    throw error;
+  }
+}
+
 export async function createLesson(outline: string): Promise<LessonRow> {
   const supabase = createAdminClient();
   const { data, error } = await supabase

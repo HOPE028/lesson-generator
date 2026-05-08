@@ -84,6 +84,42 @@ describe("validateGeneratedLessonSource", () => {
     ).toThrow(/Unsafe TypeScript node rejected|JSON-compatible/);
   });
 
+  it("rejects imports, variables, and classes", () => {
+    expect(() =>
+      validateGeneratedLessonSource(`import data from "./data";
+      export default data;`),
+    ).toThrow(/Unsafe TypeScript node rejected/);
+
+    expect(() =>
+      validateGeneratedLessonSource(`const lesson = {};
+      export default lesson;`),
+    ).toThrow(/Unsafe TypeScript node rejected/);
+
+    expect(() =>
+      validateGeneratedLessonSource(`class Lesson {}
+      export default {};`),
+    ).toThrow(/Unsafe TypeScript node rejected/);
+  });
+
+  it("rejects missing default exports and non-static object shapes", () => {
+    expect(() =>
+      validateGeneratedLessonSource(`export const lesson = {};`),
+    ).toThrow(/Unsafe TypeScript node rejected|default-export/);
+
+    expect(() =>
+      validateGeneratedLessonSource(`export default {
+        ...{},
+        title: "Bad"
+      };`),
+    ).toThrow(/simple property assignments/);
+
+    expect(() =>
+      validateGeneratedLessonSource(`export default {
+        ["title"]: "Bad"
+      };`),
+    ).toThrow(/static object keys/);
+  });
+
   it("rejects schema-invalid lessons", () => {
     expect(() =>
       validateGeneratedLessonSource(`export default {
