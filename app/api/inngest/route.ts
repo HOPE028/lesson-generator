@@ -5,6 +5,9 @@ import { inngest } from "@/inngest/client";
 import { generateLessonFunction } from "@/inngest/generate-lesson";
 import { ensureLangfuseTracing, flushLangfuse } from "@/lib/langfuse";
 
+export const runtime = "nodejs";
+export const maxDuration = 300;
+
 ensureLangfuseTracing();
 
 const handlers = serve({

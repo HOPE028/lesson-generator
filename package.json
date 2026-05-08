@@ -2,6 +2,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:inngest": "NPM_CONFIG_CACHE=$(mktemp -d) npm exec --ignore-scripts=false --package=inngest-cli@latest -- inngest-cli dev -u http://localhost:3000/api/inngest",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",

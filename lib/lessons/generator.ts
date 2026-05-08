@@ -79,55 +79,62 @@ export async function planLesson(params: {
 }) {
   ensureLangfuseTracing();
 
-  return startActiveObservation(
-    "planning-phase",
-    async (span) =>
-      propagateAttributes(
-        {
-          sessionId: params.lessonId,
-          traceName: "lesson-generation-workflow",
-          tags: ["lesson-generator", "planning"],
-          metadata: { lessonId: params.lessonId, feature: "lesson_generation" },
+  try {
+    return await startActiveObservation(
+      "planning-phase",
+      async (span) =>
+        propagateAttributes(
+          {
+            sessionId: params.lessonId,
+            traceName: "lesson-generation-workflow",
+            tags: ["lesson-generator", "planning"],
+            metadata: { lessonId: params.lessonId, feature: "lesson_generation" },
+          },
+          async () => {
+            span.update({ input: { outline: params.outline } });
+
+            const openai = getOpenAI({
+              lessonId: params.lessonId,
+              phase: "planning",
+            });
+            const response = await openai.responses.parse({
+              model: process.env.OPENAI_MODEL || "gpt-5.5",
+              instructions: PLANNING_PROMPT,
+              input: `Lesson outline: ${params.outline}`,
+              text: {
+                format: zodTextFormat(aiPlanningResponseSchema, "lesson_planning"),
+              },
+            });
+
+            if (!response.output_parsed) {
+              throw new Error("OpenAI did not return a parseable planning response.");
+            }
+
+            const validated = validateGeneratedPlanSource(
+              response.output_parsed.typescriptSource,
+            );
+
+            span.update({
+              output: {
+                questionCount: validated.plan.questions.length,
+                visualCount: validated.plan.visuals.length,
+              },
+            });
+
+            return validated;
+          },
+        ),
+      {
+        parentSpanContext: {
+          traceId: params.traceId,
+          spanId: "0000000000000001",
+          traceFlags: 1,
         },
-        async () => {
-          span.update({ input: { outline: params.outline } });
-
-          const openai = getOpenAI({ lessonId: params.lessonId, phase: "planning" });
-          const response = await openai.responses.parse({
-            model: process.env.OPENAI_MODEL || "gpt-5.5",
-            instructions: PLANNING_PROMPT,
-            input: `Lesson outline: ${params.outline}`,
-            text: {
-              format: zodTextFormat(aiPlanningResponseSchema, "lesson_planning"),
-            },
-          });
-
-          if (!response.output_parsed) {
-            throw new Error("OpenAI did not return a parseable planning response.");
-          }
-
-          const validated = validateGeneratedPlanSource(
-            response.output_parsed.typescriptSource,
-          );
-
-          span.update({
-            output: {
-              questionCount: validated.plan.questions.length,
-              visualCount: validated.plan.visuals.length,
-            },
-          });
-
-          return validated;
-        },
-      ),
-    {
-      parentSpanContext: {
-        traceId: params.traceId,
-        spanId: "0000000000000001",
-        traceFlags: 1,
       },
-    },
-  );
+    );
+  } finally {
+    await flushLangfuse();
+  }
 }
 
 export async function generateLessonFromPlan(params: {

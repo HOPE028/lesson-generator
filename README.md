@@ -72,7 +72,7 @@ bun run dev
 Start the Inngest dev server in another terminal:
 
 ```bash
-bunx inngest-cli@latest dev -u http://localhost:3000/api/inngest
+bun run dev:inngest
 ```
 
 Then open http://localhost:3000.
