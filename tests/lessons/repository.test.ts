@@ -120,12 +120,13 @@ describe("lesson repository", () => {
     await markPlanningComplete({
       id: "lesson-id",
       plan: validPlan,
-      planningSource: "planning source",
     });
     await markLessonGenerated({
       id: "lesson-id",
-      lesson: validLesson,
-      typescriptSource: "lesson source",
+      title: validLesson.title,
+      tsxSource: "tsx source",
+      renderTree: { type: "article", props: {}, children: ["Lesson"] },
+      assetManifest: {},
       traceId: "trace-id",
       traceUrl: "https://langfuse.example/trace/trace-id",
     });
@@ -134,13 +135,16 @@ describe("lesson repository", () => {
       title: validPlan.title,
       status: "generating",
       planning_json: validPlan,
-      planning_typescript_source: "planning source",
+      planning_typescript_source: null,
     });
     expect(generatedQuery.update).toHaveBeenCalledWith({
       title: validLesson.title,
       status: "generated",
-      lesson_json: validLesson,
-      typescript_source: "lesson source",
+      lesson_json: null,
+      typescript_source: null,
+      tsx_source: "tsx source",
+      render_tree_json: { type: "article", props: {}, children: ["Lesson"] },
+      asset_manifest_json: {},
       trace_id: "trace-id",
       trace_url: "https://langfuse.example/trace/trace-id",
       error_message: null,

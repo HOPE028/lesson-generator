@@ -43,11 +43,10 @@ export const generateLessonFunction = inngest.createFunction(
         markPlanningComplete({
           id: lessonId,
           plan: planned.plan,
-          planningSource: planned.normalizedSource,
         }),
       );
 
-      const generated = await step.run("generate and validate TypeScript", () =>
+      const generated = await step.run("generate and validate TSX", () =>
         generateLessonFromPlan({
           lessonId,
           outline: lesson.outline,
@@ -61,8 +60,10 @@ export const generateLessonFunction = inngest.createFunction(
       await step.run("persist generated lesson", () =>
         markLessonGenerated({
           id: lessonId,
-          lesson: generated.lesson,
-          typescriptSource: generated.normalizedSource,
+          title: generated.title,
+          tsxSource: generated.tsxSource,
+          renderTree: generated.renderTree,
+          assetManifest: generated.assetManifest,
           traceId,
           traceUrl: generated.traceUrl,
         }),

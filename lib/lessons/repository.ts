@@ -2,13 +2,15 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import {
   lessonRowSchema,
   type GeneratedLesson,
+  type LessonAssetManifest,
   type LessonPlan,
+  type LessonRenderNode,
   type LessonRow,
   type LessonStatus,
 } from "./schema";
 
 const LESSON_SELECT =
-  "id, outline, title, status, typescript_source, lesson_json, planning_typescript_source, planning_json, trace_id, trace_url, error_message, attempt_count, created_at, updated_at";
+  "id, outline, title, status, typescript_source, lesson_json, tsx_source, render_tree_json, asset_manifest_json, planning_typescript_source, planning_json, trace_id, trace_url, error_message, attempt_count, created_at, updated_at";
 
 function parseLessonRow(data: unknown): LessonRow | null {
   const result = lessonRowSchema.safeParse(data);
@@ -98,7 +100,6 @@ export async function updateLessonStatus(id: string, status: LessonStatus) {
 export async function markPlanningComplete(params: {
   id: string;
   plan: LessonPlan;
-  planningSource: string;
 }) {
   const supabase = createAdminClient();
   const { error } = await supabase
@@ -107,7 +108,7 @@ export async function markPlanningComplete(params: {
       title: params.plan.title,
       status: "generating",
       planning_json: params.plan,
-      planning_typescript_source: params.planningSource,
+      planning_typescript_source: null,
     })
     .eq("id", params.id);
 
@@ -118,19 +119,26 @@ export async function markPlanningComplete(params: {
 
 export async function markLessonGenerated(params: {
   id: string;
-  lesson: GeneratedLesson;
-  typescriptSource: string;
+  title: string;
+  tsxSource: string;
+  renderTree: LessonRenderNode;
+  assetManifest: LessonAssetManifest;
   traceId: string;
   traceUrl: string | null;
+  lesson?: GeneratedLesson;
+  typescriptSource?: string;
 }) {
   const supabase = createAdminClient();
   const { error } = await supabase
     .from("lessons")
     .update({
-      title: params.lesson.title,
+      title: params.title,
       status: "generated",
-      lesson_json: params.lesson,
-      typescript_source: params.typescriptSource,
+      lesson_json: params.lesson ?? null,
+      typescript_source: params.typescriptSource ?? null,
+      tsx_source: params.tsxSource,
+      render_tree_json: params.renderTree,
+      asset_manifest_json: params.assetManifest,
       trace_id: params.traceId,
       trace_url: params.traceUrl,
       error_message: null,

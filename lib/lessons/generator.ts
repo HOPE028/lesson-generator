@@ -4,19 +4,17 @@ import { observeOpenAI } from "@langfuse/openai";
 import { propagateAttributes, startActiveObservation } from "@langfuse/tracing";
 
 import {
-  aiLessonResponseSchema,
-  aiPlanningResponseSchema,
-  type GeneratedLesson,
+  aiLessonPlanOutputSchema,
+  lessonPlanSchema,
+  type AiLessonPlanOutput,
+  type LessonAssetManifest,
   type LessonImageRequest,
   type LessonPlan,
-  type LessonVisual,
 } from "@/lib/lessons/schema";
 import {
-  normalizeGeneratedLessonSource,
-  type LessonValidationResult,
-  validateGeneratedLessonSource,
-  validateGeneratedPlanSource,
-} from "@/lib/lessons/typescript-validator";
+  type TsxValidationResult,
+  validateGeneratedTsxSource,
+} from "@/lib/lessons/tsx-validator";
 import { uploadLessonImage } from "@/lib/lessons/assets";
 import {
   ensureLangfuseTracing,
@@ -24,20 +22,18 @@ import {
   getLangfuseTraceUrl,
 } from "@/lib/langfuse";
 
-export const PLANNING_PROMPT = `Plan a classroom lesson as TypeScript.
-
-Return only an object with:
-- typescriptSource: TypeScript code that default-exports one JSON-compatible object satisfying LessonPlan.
+export const PLANNING_PROMPT = `Plan a classroom lesson as structured JSON.
 
 The LessonPlan object must include:
 - title: a concise user-facing lesson title
-- summary
+- summary: a detailed generation brief, at least 20 characters
 - questions: multiple-choice questions with id, prompt, 3-4 choices, correctAnswer, explanation, and visualRefs
 - visuals: safe structured SVG specs with id, title, alt, placement, viewBox, and elements
 - imageRequests: up to two rich image requests with id, title, alt, placement, and prompt
 
 Rules:
-- Do not include imports, functions, JSX, markdown fences, comments, variables, or runtime code.
+- Return only fields that match the provided JSON schema.
+- Do not include TypeScript source, imports, functions, JSX, markdown fences, comments, variables, or runtime code.
 - correctAnswer must exactly match one item in choices.
 - The title should be specific to the outline and ready to show in the lesson table.
 - Use SVG visuals for diagrams, maps, labels, timelines, charts, geometric explanations, or anything that needs precise text.
@@ -50,37 +46,57 @@ Rules:
 - Make placement values reference either a question id or a section concept.
 - Make each image request prompt self-contained, classroom-safe, visually specific, and free of copyrighted characters or brands.`;
 
-const GENERATION_PROMPT = `Generate classroom lesson content as TypeScript from the supplied outline and validated LessonPlan.
+const PLANNING_SCHEMA_CHECKLIST = `LessonPlan validation checklist:
+- title: 3-120 characters
+- summary: at least 20 characters
+- questions: 1-12 multiple-choice questions with id, prompt, 2-5 choices, correctAnswer, explanation, and visualRefs
+- correctAnswer exactly matches one choices item
+- visuals: 0-8 structured SVG visuals, each with 1-16 simple elements
+- for SVG elements, fill and stroke are always required strings; unused numeric/text fields must be null
+- imageRequests: 0-2 requests, each prompt 20-2000 characters
+- no TypeScript source, imports, variables, functions, calls, classes, JSX, markdown fences, or comments`;
 
-Return an object with:
-- title: a concise lesson title
-- typescriptSource: TypeScript code that default-exports one JSON-compatible object satisfying GeneratedLesson.
+export const GENERATION_PROMPT = `Generate a polished classroom lesson as TSX from the supplied outline and validated LessonPlan.
 
-The TypeScript source must include:
-- title, overview, objectives, visuals, sections, questions
-- questions copied from the plan as multiple-choice questions with id, prompt, choices, correctAnswer, explanation, visualRefs
+Return only the TSX source. Do not wrap it in JSON, markdown fences, or prose.
+
+The TSX source must:
+- import approved widgets only from "@/components/lessons/generated-lesson-runtime"
+- default-export one function component with no props
+- return JSX directly from that function
+- use semantic HTML, flexible layout, and Tailwind classes
+- place approved widgets anywhere they are useful
+- look like a finished lesson page, not raw generated content
 
 Rules:
-- Do not include imports, functions, JSX, markdown fences, comments, variables, or runtime code.
-- The TypeScript source must be exactly one default-exported object literal.
-- Use JSON-compatible literal values only: strings, numbers, booleans, null, arrays, and objects.
-- Use the plan as the source of truth for question and visual structure.
-- Copy questions from the plan exactly, including id, choices, correctAnswer, explanation, and visualRefs.
-- Copy SVG visuals from the plan exactly. Do not invent additional SVG elements, visual ids, or visual refs.
-- Do not include imageRequests or image visuals in the GeneratedLesson TypeScript; raster images are generated after validation.
-- Every section body must be at least 40 characters.
-- The lesson must have 1-6 objectives, 1-6 sections, 0-8 visuals, and 0-12 questions.
-- Keep content useful but compact enough for a web page.`;
+- Do not include markdown fences, comments, variables, local hooks, event handlers, raw images, raw links, style props, or dangerouslySetInnerHTML.
+- Do not call functions or access browser/server APIs.
+- Normal HTML elements may use className, id, role, title, and aria-label.
+- Use <GeneratedVisual id="..."> to place planned SVG visuals or generated image assets from the validated plan.
+- Use <GeneratedImage id="..."> only for raster imageRequests present in the validated plan; prefer <GeneratedVisual> for general lesson visuals.
+- Use <Quiz questions={...} /> for interactive questions; questions must be JSON-compatible literals and correctAnswer must exactly match one choices item.
+- The lesson is rendered on a very light beige page background (#f6f3ec). Default text should be black or near-black; never use white, pale gray, yellow, or low-contrast text directly on this background.
+- Do not add a full-page background wrapper like min-h-screen or bg-[#f6f3ec]; the app page already provides the background. Start with a centered lesson container.
+- Use a polished layout with a centered max-width container, comfortable page padding, consistent section spacing, and readable line lengths.
+- Use Tailwind spacing deliberately: prefer outer wrappers like "mx-auto max-w-4xl px-5 py-10 sm:py-14", section gaps like "space-y-8" or "space-y-10", and card/section padding like "p-5 sm:p-6" or "p-6 sm:p-8".
+- Use clear typography hierarchy: large black h1, smaller black section headings, and body copy with "text-black/75" or stronger.
+- If a section needs a surface, use white or very light neutral backgrounds with subtle borders and shadows so black text remains readable.
+- Every bordered, rounded, tinted, or card-like box must include a visible background and real internal padding. Never use a faint border alone around content.
+- Avoid four-column grids for text-heavy cards; use one column on mobile and two columns on larger screens unless the content is extremely short.
+- Do not hand-build mathematical notation, diagrams, fraction bars, or long-division layouts using nested div/span elements, margins, borders, and monospace text. These look fragile. Use a planned <GeneratedVisual id="..."> for diagrams when available, or explain the example in a clean padded text card.
+- Avoid cramped layouts, edge-to-edge text, tiny padding, overlapping elements, awkward manual positioning, and decorative color choices that reduce legibility.
+- Keep content useful but compact enough for a web page.
+- Prefer expressive page structure over a rigid template.`;
 
-const GENERATED_LESSON_SCHEMA_CHECKLIST = `GeneratedLesson validation checklist:
-- title: 3-120 characters
-- overview: 20-1200 characters
-- objectives: 1-6 items, each 3-180 characters
-- sections: 1-6 items with heading 3-100 characters, body 40-1800 characters, examples 0-5 items
-- visuals: copy only the validated plan visuals; each SVG has 1-16 elements
-- questions: copy only the validated plan questions; correctAnswer must exactly match one choices item
-- visualRefs: every ref should match a copied visual id
-- no imageRequests, imageUrl, storagePath, imports, variables, functions, calls, classes, markdown fences, or comments`;
+const GENERATED_LESSON_SCHEMA_CHECKLIST = `Generated TSX validation checklist:
+- tsxSource imports only from "@/components/lessons/generated-lesson-runtime"
+- tsxSource default-exports one function component with no props
+- the component body contains exactly one return statement returning JSX
+- JSX uses approved HTML tags or GeneratedImage/GeneratedVisual/Quiz
+- no variables, hooks, calls, local functions, event handlers, spread props, style props, raw images, raw links, browser/server APIs, markdown fences, or comments
+- GeneratedImage ids match planned imageRequests
+- GeneratedVisual ids match planned visuals or imageRequests
+- Quiz questions are literal objects with id, prompt, choices, correctAnswer, explanation, and visualRefs`;
 
 const IMAGE_OUTPUT_FORMAT = "webp";
 const IMAGE_SIZE = "1536x1024";
@@ -144,6 +160,74 @@ function getOpenAI(params: {
   });
 }
 
+function requireNumber(value: number | null, field: string, type: string) {
+  if (typeof value !== "number") {
+    throw new Error(`${type} SVG element is missing numeric field "${field}".`);
+  }
+
+  return value;
+}
+
+function requireText(value: string | null, field: string, type: string) {
+  if (!value) {
+    throw new Error(`${type} SVG element is missing text field "${field}".`);
+  }
+
+  return value;
+}
+
+function normalizeAiLessonPlanOutput(output: AiLessonPlanOutput): LessonPlan {
+  return lessonPlanSchema.parse({
+    ...output,
+    visuals: output.visuals.map((visual) => ({
+      ...visual,
+      elements: visual.elements.map((element) => {
+        if (element.type === "circle") {
+          return {
+            type: "circle",
+            cx: requireNumber(element.cx, "cx", element.type),
+            cy: requireNumber(element.cy, "cy", element.type),
+            r: requireNumber(element.r, "r", element.type),
+            fill: element.fill,
+            stroke: element.stroke,
+          };
+        }
+
+        if (element.type === "rect") {
+          return {
+            type: "rect",
+            x: requireNumber(element.x, "x", element.type),
+            y: requireNumber(element.y, "y", element.type),
+            width: requireNumber(element.width, "width", element.type),
+            height: requireNumber(element.height, "height", element.type),
+            fill: element.fill,
+            stroke: element.stroke,
+          };
+        }
+
+        if (element.type === "line") {
+          return {
+            type: "line",
+            x1: requireNumber(element.x1, "x1", element.type),
+            y1: requireNumber(element.y1, "y1", element.type),
+            x2: requireNumber(element.x2, "x2", element.type),
+            y2: requireNumber(element.y2, "y2", element.type),
+            stroke: element.stroke,
+          };
+        }
+
+        return {
+          type: "text",
+          x: requireNumber(element.x, "x", element.type),
+          y: requireNumber(element.y, "y", element.type),
+          text: requireText(element.text, "text", element.type),
+          fill: element.fill,
+        };
+      }),
+    })),
+  });
+}
+
 export async function planLesson(params: {
   outline: string;
   lessonId: string;
@@ -165,35 +249,66 @@ export async function planLesson(params: {
           async () => {
             span.update({ input: { outline: params.outline } });
 
-            const openai = getOpenAI({
-              lessonId: params.lessonId,
-              phase: "planning",
-            });
-            const response = await openai.responses.parse({
-              model: process.env.OPENAI_MODEL || "gpt-5.5",
-              instructions: PLANNING_PROMPT,
-              input: `Lesson outline: ${params.outline}`,
-              text: {
-                format: zodTextFormat(aiPlanningResponseSchema, "lesson_planning"),
-              },
-            });
+            let validationError: string | undefined;
 
-            if (!response.output_parsed) {
-              throw new Error("OpenAI did not return a parseable planning response.");
+            for (let attempt = 1; attempt <= 3; attempt += 1) {
+              const openai = getOpenAI({
+                lessonId: params.lessonId,
+                phase: "planning",
+                attempt,
+              });
+              const repairInstruction = validationError
+                ? `\n\nThe previous LessonPlan failed validation with this error:\n${validationError}\n\nUse this checklist before returning the corrected complete response:\n${PLANNING_SCHEMA_CHECKLIST}`
+                : "";
+              const response = await openai.responses.parse({
+                model: process.env.OPENAI_MODEL || "gpt-5.5",
+                instructions: `${PLANNING_PROMPT}\n\n${PLANNING_SCHEMA_CHECKLIST}`,
+                input: `Lesson outline: ${params.outline}${repairInstruction}`,
+                text: {
+                  format: zodTextFormat(aiLessonPlanOutputSchema, "lesson_planning"),
+                },
+              });
+
+              if (!response.output_parsed) {
+                throw new Error("OpenAI did not return a parseable planning response.");
+              }
+
+              try {
+                const plan = normalizeAiLessonPlanOutput(response.output_parsed);
+
+                span.update({
+                  output: {
+                    questionCount: plan.questions.length,
+                    visualCount: plan.visuals.length,
+                    attempts: attempt,
+                  },
+                });
+
+                return { plan };
+              } catch (error) {
+                validationError = formatValidationError(error);
+
+                await startActiveObservation("planning-repair-needed", (repairSpan) => {
+                  repairSpan.update({
+                    level: attempt === 3 ? "ERROR" : "WARNING",
+                    input: { attempt },
+                    output: { validationError },
+                  });
+                });
+
+                if (attempt === 3) {
+                  span.update({
+                    level: "ERROR",
+                    output: { status: "failed", validationError },
+                  });
+                  throw new Error(
+                    `Generated LessonPlan failed validation: ${validationError}`,
+                  );
+                }
+              }
             }
 
-            const validated = validateGeneratedPlanSource(
-              response.output_parsed.typescriptSource,
-            );
-
-            span.update({
-              output: {
-                questionCount: validated.plan.questions.length,
-                visualCount: validated.plan.visuals.length,
-              },
-            });
-
-            return validated;
+            throw new Error("Generated LessonPlan failed validation.");
           },
         ),
       {
@@ -285,18 +400,19 @@ async function generateLessonImages(params: {
   lessonId: string;
   traceId: string;
   plan: LessonPlan;
-  lesson: GeneratedLesson;
 }) {
   const imageRequests = params.plan.imageRequests.slice(0, 2);
+  const assets: LessonAssetManifest = Object.fromEntries(
+    params.plan.visuals.map((visual) => [visual.id, visual]),
+  );
 
   if (imageRequests.length === 0) {
     return {
-      lesson: params.lesson,
+      assets,
       failures: [] as string[],
     };
   }
 
-  const imageVisuals: LessonVisual[] = [];
   const failures: string[] = [];
 
   await startActiveObservation(
@@ -332,7 +448,7 @@ async function generateLessonImages(params: {
             image: Buffer.from(image.b64_json, "base64"),
           });
 
-          imageVisuals.push({
+          assets[request.id] = {
             kind: "image",
             id: request.id,
             title: request.title,
@@ -345,7 +461,7 @@ async function generateLessonImages(params: {
             format: IMAGE_OUTPUT_FORMAT,
             prompt: `${request.prompt}\n\nGenerated with ${model}.`,
             revisedPrompt: image.revised_prompt,
-          });
+          };
         } catch (error) {
           const message =
             error instanceof Error ? error.message : "Image generation failed.";
@@ -357,7 +473,7 @@ async function generateLessonImages(params: {
       span.update({
         output: {
           requestedImages: imageRequests.length,
-          generatedImages: imageVisuals.length,
+          generatedImages: Object.keys(assets).length,
           failedImages: failures.length,
           imageFailures: failures,
         },
@@ -373,10 +489,7 @@ async function generateLessonImages(params: {
   );
 
   return {
-    lesson: {
-      ...params.lesson,
-      visuals: [...params.lesson.visuals, ...imageVisuals],
-    },
+    assets,
     failures,
   };
 }
@@ -420,46 +533,43 @@ export async function generateLessonFromPlan(params: {
                 attempt,
               });
               const repairInstruction = validationError
-                ? `\n\nThe previous TypeScript failed validation with this error:\n${validationError}\n\nUse this checklist before returning the corrected complete response:\n${GENERATED_LESSON_SCHEMA_CHECKLIST}`
+                ? `\n\nThe previous TSX failed validation with this error:\n${validationError}\n\nUse this checklist before returning the corrected TSX source:\n${GENERATED_LESSON_SCHEMA_CHECKLIST}`
                 : "";
 
-              const response = await openai.responses.parse({
+              const response = await openai.responses.create({
                 model: process.env.OPENAI_MODEL || "gpt-5.5",
                 instructions: GENERATION_PROMPT,
                 input: `Lesson outline: ${params.outline}\n\nValidated plan:\n${JSON.stringify(params.plan, null, 2)}\n\n${GENERATED_LESSON_SCHEMA_CHECKLIST}${repairInstruction}`,
-                text: {
-                  format: zodTextFormat(aiLessonResponseSchema, "lesson_generation"),
-                },
               });
 
-              if (!response.output_parsed) {
-                throw new Error("OpenAI did not return a parseable lesson response.");
+              if (!response.output_text.trim()) {
+                throw new Error("OpenAI did not return TSX source.");
               }
-              const parsedLessonResponse = response.output_parsed;
-              let validated: LessonValidationResult;
+
+              const tsxSource = response.output_text;
+              let validated: TsxValidationResult;
 
               try {
                 validated = await startActiveObservation(
-                  "validate-generated-typescript",
+                  "validate-generated-tsx",
                   async (validationSpan) => {
                     validationSpan.update({
                       input: {
                         attempt,
-                        title: parsedLessonResponse.title,
-                        sourceLength: parsedLessonResponse.typescriptSource.length,
+                        title: params.plan.title,
+                        sourceLength: tsxSource.length,
                       },
                     });
 
-                    const result = validateGeneratedLessonSource(
-                      parsedLessonResponse.typescriptSource,
+                    const result = validateGeneratedTsxSource(
+                      tsxSource,
+                      { plan: params.plan },
                     );
 
                     validationSpan.update({
                       output: {
                         valid: true,
-                        title: result.lesson.title,
-                        sectionCount: result.lesson.sections.length,
-                        questionCount: result.lesson.questions.length,
+                        title: params.plan.title,
                       },
                     });
 
@@ -504,26 +614,23 @@ export async function generateLessonFromPlan(params: {
                 lessonId: params.lessonId,
                 traceId: params.traceId,
                 plan: params.plan,
-                lesson: validated.lesson,
               });
 
               span.update({
                 output: {
                   status: "generated",
-                  title: illustrated.lesson.title,
+                  title: params.plan.title,
                   attempts: attempt,
-                  generatedImages: illustrated.lesson.visuals.filter(
-                    (visual) => visual.kind === "image",
-                  ).length,
+                  generatedImages: Object.keys(illustrated.assets).length,
                   imageFailures: illustrated.failures.length,
                 },
               });
 
               return {
-                lesson: illustrated.lesson,
-                normalizedSource: normalizeGeneratedLessonSource(
-                  illustrated.lesson,
-                ),
+                title: params.plan.title,
+                tsxSource: validated.normalizedSource,
+                renderTree: validated.renderTree,
+                assetManifest: illustrated.assets,
                 traceUrl: getLangfuseTraceUrl(params.traceId),
               };
             }

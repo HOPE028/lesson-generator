@@ -17,6 +17,15 @@ describe("lesson schemas", () => {
     ).toThrow();
   });
 
+  it("accepts planning summaries longer than 1000 characters", () => {
+    const plan = lessonPlanSchema.parse({
+      ...validPlan,
+      summary: "x".repeat(1001),
+    });
+
+    expect(plan.summary).toHaveLength(1001);
+  });
+
   it("accepts legacy persisted planning rows without titles", () => {
     const row = lessonRowSchema.parse(
       buildLessonRow({

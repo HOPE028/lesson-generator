@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 
 import { CopyLinkButton } from "@/components/lessons/copy-link-button";
+import { GeneratedLessonRuntime } from "@/components/lessons/generated-lesson-runtime";
 import { LessonRenderer } from "@/components/lessons/lesson-renderer";
 import { StatusBadge } from "@/components/lessons/status-badge";
 import { getLesson } from "@/lib/lessons/repository";
@@ -39,10 +40,13 @@ export default async function LessonPage({
           )}
         </div>
 
-        {lesson.status === "generated" && lesson.lesson_json ? (
-          <>
-            <LessonRenderer lesson={lesson.lesson_json} />
-          </>
+        {lesson.status === "generated" && lesson.render_tree_json ? (
+          <GeneratedLessonRuntime
+            assets={lesson.asset_manifest_json ?? {}}
+            renderTree={lesson.render_tree_json}
+          />
+        ) : lesson.status === "generated" && lesson.lesson_json ? (
+          <LessonRenderer lesson={lesson.lesson_json} />
         ) : null}
 
         {["planning", "generating", "validating", "illustrating"].includes(

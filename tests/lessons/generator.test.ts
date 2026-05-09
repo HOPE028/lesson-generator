@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { validLesson, validPlan } from "@/tests/fixtures/lessons";
+import { validPlan } from "@/tests/fixtures/lessons";
 
-const { parseMock, forceFlushMock } = vi.hoisted(() => ({
+const { createMock, parseMock, forceFlushMock } = vi.hoisted(() => ({
+  createMock: vi.fn(),
   parseMock: vi.fn(),
   forceFlushMock: vi.fn(),
 }));
@@ -11,6 +12,7 @@ vi.mock("openai", () => ({
   default: vi.fn(function OpenAI() {
     return {
       responses: {
+        create: createMock,
         parse: parseMock,
       },
     };
@@ -49,11 +51,17 @@ describe("generateLessonFromPlan", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     globalThis.__lessonGeneratorLangfuse = undefined;
-    parseMock.mockResolvedValue({
-      output_parsed: {
-        title: validLesson.title,
-        typescriptSource: `export default ${JSON.stringify(validLesson)} satisfies GeneratedLesson;`,
-      },
+    createMock.mockResolvedValue({
+      output_text: `import { Quiz } from "@/components/lessons/generated-lesson-runtime";
+
+export default function GeneratedLesson() {
+  return (
+    <article className="space-y-8">
+      <h1>${validPlan.title}</h1>
+      <Quiz questions={${JSON.stringify(validPlan.questions)}} />
+    </article>
+  );
+}`,
     });
     forceFlushMock.mockResolvedValue(undefined);
   });
@@ -69,11 +77,44 @@ describe("generateLessonFromPlan", () => {
       onValidating: vi.fn().mockRejectedValue(new Error("status constraint")),
     });
 
-    expect(parseMock).toHaveBeenCalledTimes(1);
-    expect(result.lesson.title).toBe(validLesson.title);
+    expect(createMock).toHaveBeenCalledTimes(1);
+    expect(result.title).toBe(validPlan.title);
+    expect(result.renderTree).toHaveProperty("type", "article");
+    expect(result.assetManifest).toHaveProperty(validPlan.visuals[0].id);
     expect(warn).toHaveBeenCalledWith(
       "Mark lesson validating failed:",
       expect.any(Error),
     );
+  });
+});
+
+describe("planLesson", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    globalThis.__lessonGeneratorLangfuse = undefined;
+    forceFlushMock.mockResolvedValue(undefined);
+  });
+
+  it("accepts planning summaries longer than 1000 characters", async () => {
+    parseMock.mockResolvedValueOnce({
+      output_parsed: {
+        ...validPlan,
+        summary: "x".repeat(1001),
+      },
+    });
+
+    const { planLesson } = await import("@/lib/lessons/generator");
+
+    await expect(
+      planLesson({
+        outline: "A 10 question pop quiz on Florida",
+        lessonId: "lesson-id",
+        traceId: "8579c551e57851c86d74855dbd37b5e4",
+      }),
+    ).resolves.toMatchObject({
+      plan: { title: validPlan.title, summary: "x".repeat(1001) },
+    });
+
+    expect(parseMock).toHaveBeenCalledTimes(1);
   });
 });

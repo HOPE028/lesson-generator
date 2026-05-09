@@ -100,6 +100,47 @@ export const lessonImageRequestSchema = z.object({
 
 export type LessonImageRequest = z.infer<typeof lessonImageRequestSchema>;
 
+const renderPrimitiveSchema = z.union([z.string(), z.number(), z.boolean()]);
+
+export type RenderPropValue =
+  | z.infer<typeof renderPrimitiveSchema>
+  | RenderPropValue[]
+  | { [key: string]: RenderPropValue };
+
+export type LessonRenderNode =
+  | string
+  | {
+      type: string;
+      props: Record<string, RenderPropValue>;
+      children: LessonRenderNode[];
+    };
+
+const renderPropValueSchema: z.ZodType<RenderPropValue> = z.lazy(() =>
+  z.union([
+    renderPrimitiveSchema,
+    z.array(renderPropValueSchema),
+    z.record(z.string(), renderPropValueSchema),
+  ]),
+);
+
+export const lessonRenderNodeSchema: z.ZodType<LessonRenderNode> = z.lazy(() =>
+  z.union([
+    z.string(),
+    z.object({
+      type: z.string().min(1).max(80),
+      props: z.record(z.string(), renderPropValueSchema).default({}),
+      children: z.array(lessonRenderNodeSchema).max(200).default([]),
+    }),
+  ]),
+);
+
+export const lessonAssetManifestSchema = z.record(
+  z.string().min(2).max(60),
+  lessonVisualSchema,
+);
+
+export type LessonAssetManifest = z.infer<typeof lessonAssetManifestSchema>;
+
 export const legacyQuestionSchema = z.object({
   prompt: z.string().min(5).max(500),
   answer: z.string().min(1).max(500),
@@ -107,13 +148,60 @@ export const legacyQuestionSchema = z.object({
 
 export const lessonPlanSchema = z.object({
   title: z.string().min(3).max(120),
-  summary: z.string().min(20).max(1000),
+  summary: z.string().min(20),
   questions: z.array(multipleChoiceQuestionSchema).min(1).max(12),
   visuals: z.array(lessonVisualSchema).max(8).default([]),
   imageRequests: z.array(lessonImageRequestSchema).max(2).default([]),
 });
 
 export type LessonPlan = z.infer<typeof lessonPlanSchema>;
+
+const aiSvgElementSchema = z.object({
+  type: z.enum(["circle", "rect", "line", "text"]),
+  cx: z.number().nullable(),
+  cy: z.number().nullable(),
+  r: z.number().nullable(),
+  x: z.number().nullable(),
+  y: z.number().nullable(),
+  width: z.number().nullable(),
+  height: z.number().nullable(),
+  x1: z.number().nullable(),
+  y1: z.number().nullable(),
+  x2: z.number().nullable(),
+  y2: z.number().nullable(),
+  text: z.string().max(80).nullable(),
+  fill: z.string().max(40),
+  stroke: z.string().max(40),
+});
+
+const aiMultipleChoiceQuestionSchema = z.object({
+  id: z.string().min(2).max(60),
+  prompt: z.string().min(5).max(500),
+  choices: z.array(z.string().min(1).max(240)).min(2).max(5),
+  correctAnswer: z.string().min(1).max(240),
+  explanation: z.string().min(5).max(500),
+  visualRefs: z.array(z.string().min(2).max(60)).max(3),
+});
+
+const aiSvgLessonVisualSchema = z.object({
+  kind: z.literal("svg"),
+  id: z.string().min(2).max(60),
+  title: z.string().min(3).max(100),
+  alt: z.string().min(8).max(240),
+  placement: z.string().min(2).max(80),
+  viewBox: z.string().min(5).max(40),
+  elements: z.array(aiSvgElementSchema).min(1).max(16),
+});
+
+export const aiLessonPlanOutputSchema = z.object({
+  title: z.string().min(3).max(120),
+  summary: z.string().min(20),
+  questions: z.array(aiMultipleChoiceQuestionSchema).min(1).max(12),
+  visuals: z.array(aiSvgLessonVisualSchema).max(8),
+  imageRequests: z.array(lessonImageRequestSchema).max(2),
+});
+
+export type AiLessonPlanOutput = z.infer<typeof aiLessonPlanOutputSchema>;
 
 export const persistedLessonPlanSchema = lessonPlanSchema.extend({
   title: z.string().min(3).max(120).optional(),
@@ -149,6 +237,9 @@ export const lessonRowSchema = z.object({
   status: lessonStatusSchema,
   typescript_source: z.string().nullable(),
   lesson_json: generatedLessonSchema.nullable(),
+  tsx_source: z.string().nullable().optional(),
+  render_tree_json: lessonRenderNodeSchema.nullable().optional(),
+  asset_manifest_json: lessonAssetManifestSchema.nullable().optional(),
   planning_typescript_source: z.string().nullable().optional(),
   planning_json: persistedLessonPlanSchema.nullable().optional(),
   trace_id: z.string().nullable(),
@@ -163,13 +254,4 @@ export type LessonRow = z.infer<typeof lessonRowSchema>;
 
 export const createLessonRequestSchema = z.object({
   outline: z.string().trim().min(8).max(2000),
-});
-
-export const aiLessonResponseSchema = z.object({
-  title: z.string().min(3).max(120),
-  typescriptSource: z.string().min(80).max(20000),
-});
-
-export const aiPlanningResponseSchema = z.object({
-  typescriptSource: z.string().min(80).max(20000),
 });
